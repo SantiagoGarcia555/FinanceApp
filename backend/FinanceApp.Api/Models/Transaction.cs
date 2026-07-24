@@ -11,6 +11,9 @@ public class Transaction
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
+    public User? User { get; set; }
+    public Guid AccountId { get; set; }
+    public Account? Account { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "COP";
     public string Description { get; set; } = string.Empty;

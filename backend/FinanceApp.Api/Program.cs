@@ -34,6 +34,8 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    // Sin remapeo de claims: "sub" llega tal cual, no como ClaimTypes.NameIdentifier.
+    options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,

@@ -42,7 +42,18 @@ public class AuthController(
         };
         user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
 
+        // Cuenta por defecto (Efectivo): en el MVP la cuenta es opcional para el usuario,
+        // se asume esta si no hay ninguna conectada por Open Banking (ver Especificacion_Funcional_MVP).
+        var defaultAccount = new Account
+        {
+            UserId = user.Id,
+            Name = "Efectivo",
+            Type = AccountType.Cash,
+            Origin = AccountOrigin.Manual,
+        };
+
         db.Users.Add(user);
+        db.Accounts.Add(defaultAccount);
         await db.SaveChangesAsync();
 
         return await IssueTokensAsync(user);

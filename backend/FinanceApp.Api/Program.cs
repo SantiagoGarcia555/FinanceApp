@@ -1,5 +1,12 @@
+using System.Text;
+using FinanceApp.Api.Auth;
 using FinanceApp.Api.Data;
+using FinanceApp.Api.Models;
+using FinanceApp.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +17,37 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// --- Autenticación JWT ---
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.AddSingleton<ITokenService, TokenService>();
+builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
+var jwtSecret = jwtSection["SecretKey"]
+    ?? throw new InvalidOperationException("Falta configurar Jwt:SecretKey (ver appsettings.Development.json).");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSection["Issuer"],
+        ValidAudience = jwtSection["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ClockSkew = TimeSpan.FromSeconds(30),
+    };
+});
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
@@ -39,6 +77,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

@@ -131,6 +131,99 @@ namespace FinanceApp.Api.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Categories");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("40643b72-5107-4e0d-8321-9318b6a6dae9"),
+                            Icon = "food",
+                            IsSystemDefined = true,
+                            Name = "Alimentación"
+                        },
+                        new
+                        {
+                            Id = new Guid("e0a52530-1752-46a4-b1a2-5df68d3e3f1d"),
+                            Icon = "transport",
+                            IsSystemDefined = true,
+                            Name = "Transporte"
+                        },
+                        new
+                        {
+                            Id = new Guid("3c723a1e-8528-4653-ac34-d16881e55d1c"),
+                            Icon = "home",
+                            IsSystemDefined = true,
+                            Name = "Vivienda"
+                        },
+                        new
+                        {
+                            Id = new Guid("84240dc6-9c7d-429c-80cb-eb7abdcff105"),
+                            Icon = "utilities",
+                            IsSystemDefined = true,
+                            Name = "Servicios públicos"
+                        },
+                        new
+                        {
+                            Id = new Guid("089a6b63-3b72-4831-9622-6d99599394e5"),
+                            Icon = "health",
+                            IsSystemDefined = true,
+                            Name = "Salud"
+                        },
+                        new
+                        {
+                            Id = new Guid("b372fb3c-4a28-4fbe-86e2-494191cb0ebc"),
+                            Icon = "education",
+                            IsSystemDefined = true,
+                            Name = "Educación"
+                        },
+                        new
+                        {
+                            Id = new Guid("e746965f-73fc-4208-a642-c6bbdf7ece7e"),
+                            Icon = "entertainment",
+                            IsSystemDefined = true,
+                            Name = "Entretenimiento"
+                        },
+                        new
+                        {
+                            Id = new Guid("55943f03-6976-47ad-808b-f494ff5750e2"),
+                            Icon = "clothing",
+                            IsSystemDefined = true,
+                            Name = "Ropa"
+                        },
+                        new
+                        {
+                            Id = new Guid("3ac79515-6c07-403c-8804-61728472f72f"),
+                            Icon = "savings",
+                            IsSystemDefined = true,
+                            Name = "Ahorro e inversión"
+                        },
+                        new
+                        {
+                            Id = new Guid("8eac4693-af45-4894-adc8-ce742c0d08b4"),
+                            Icon = "debt",
+                            IsSystemDefined = true,
+                            Name = "Deudas y préstamos"
+                        },
+                        new
+                        {
+                            Id = new Guid("b100c846-cb78-44cf-8d5c-32494f3c3f49"),
+                            Icon = "pets",
+                            IsSystemDefined = true,
+                            Name = "Mascotas"
+                        },
+                        new
+                        {
+                            Id = new Guid("666903fa-4cea-4cb2-a3ac-f6030cd18cf8"),
+                            Icon = "income",
+                            IsSystemDefined = true,
+                            Name = "Ingresos"
+                        },
+                        new
+                        {
+                            Id = new Guid("c17353ed-5ecc-4cd3-82fb-78e51dbd9f57"),
+                            Icon = "other",
+                            IsSystemDefined = true,
+                            Name = "Otros"
+                        });
                 });
 
             modelBuilder.Entity("FinanceApp.Api.Models.Transaction", b =>

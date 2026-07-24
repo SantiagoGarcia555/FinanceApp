@@ -85,5 +85,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(r => r.CategoryId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // --- Datos semilla: categorías predefinidas del sistema (US-08) ---
+        modelBuilder.Entity<Category>().HasData(SeedCategories.All);
     }
 }

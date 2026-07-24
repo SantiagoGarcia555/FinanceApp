@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using FinanceApp.Api.Data;
 using FinanceApp.Api.Dtos;
 using FinanceApp.Api.Models;
@@ -14,7 +15,7 @@ namespace FinanceApp.Api.Controllers;
 public class TransactionsController(AppDbContext db) : ControllerBase
 {
     private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)
+        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
             ?? throw new InvalidOperationException("Token sin claim 'sub'."));
 
     [HttpGet]

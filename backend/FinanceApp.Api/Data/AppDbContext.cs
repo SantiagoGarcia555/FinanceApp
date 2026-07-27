@@ -57,6 +57,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(t => t.Amount)
             .HasPrecision(18, 2);
 
+        // "date" puro (sin hora/zona horaria): evita el choque de Npgsql 8 que exige
+        // DateTime Kind=Utc para timestamptz cuando el cliente manda solo una fecha.
+        modelBuilder.Entity<Transaction>()
+            .Property(t => t.Date)
+            .HasColumnType("date");
+
         // --- Presupuesto ---
         modelBuilder.Entity<Budget>()
             .HasOne(b => b.User)

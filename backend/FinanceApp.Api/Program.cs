@@ -23,6 +23,10 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
+// --- Importador de extractos CSV/Excel ---
+builder.Services.AddScoped<ITransactionFileParser, CsvTransactionFileParser>();
+builder.Services.AddScoped<ITransactionFileParser, ExcelTransactionFileParser>();
+
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
 var jwtSecret = jwtSection["SecretKey"]
     ?? throw new InvalidOperationException("Falta configurar Jwt:SecretKey (ver appsettings.Development.json).");

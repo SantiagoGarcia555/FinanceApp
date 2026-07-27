@@ -3,6 +3,7 @@ using System.Security.Claims;
 using FinanceApp.Api.Data;
 using FinanceApp.Api.Dtos;
 using FinanceApp.Api.Models;
+using FinanceApp.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ namespace FinanceApp.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class TransactionsController(AppDbContext db) : ControllerBase
+public class TransactionsController(AppDbContext db, IEnumerable<ITransactionFileParser> fileParsers) : ControllerBase
 {
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
@@ -181,8 +182,119 @@ public class TransactionsController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
-    // TODO: endpoint de importación CSV/Excel (fase MVP)
-    // TODO: endpoint /api/transactions/import-csv
+    /// <summary>
+    /// Parsea el archivo (.csv/.xlsx) con el mapeo de columnas indicado y devuelve una
+    /// previsualización, marcando filas con error y posibles duplicados (fecha+monto+descripción
+    /// exactos contra transacciones ya existentes). No guarda nada en la BD (US-10/US-11).
+    /// </summary>
+    [HttpPost("import/preview")]
+    [RequestSizeLimit(10_000_000)]
+    public async Task<ActionResult<ImportPreviewResponse>> PreviewImport(
+        IFormFile file,
+        [FromQuery] string dateColumn,
+        [FromQuery] string amountColumn,
+        [FromQuery] string descriptionColumn)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest("Subí un archivo .csv o .xlsx.");
+
+        if (string.IsNullOrWhiteSpace(dateColumn) || string.IsNullOrWhiteSpace(amountColumn) || string.IsNullOrWhiteSpace(descriptionColumn))
+            return BadRequest("Indicá dateColumn, amountColumn y descriptionColumn.");
+
+        var parser = fileParsers.FirstOrDefault(p => p.CanParse(file.FileName));
+        if (parser is null)
+            return BadRequest("Formato no soportado. Subí un archivo .csv o .xlsx.");
+
+        List<ParsedImportRow> parsedRows;
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            parsedRows = parser.Parse(stream, dateColumn, amountColumn, descriptionColumn).ToList();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"No se pudo leer el archivo: {ex.Message}");
+        }
+
+        var existingSet = (await db.Transactions
+            .Where(t => t.UserId == CurrentUserId)
+            .Select(t => new { t.Date, t.Amount, t.Description })
+            .ToListAsync())
+            .Select(t => (t.Date.Date, t.Amount, Description: t.Description.Trim().ToLowerInvariant()))
+            .ToHashSet();
+
+        var previews = parsedRows.Select(r =>
+        {
+            var isDuplicate = r.Error is null
+                && r.Date is not null
+                && r.Amount is not null
+                && existingSet.Contains((r.Date.Value.Date, r.Amount.Value, (r.Description ?? string.Empty).Trim().ToLowerInvariant()));
+
+            return new ImportRowPreview(r.RowNumber, r.Date, r.Amount, r.Description, isDuplicate, r.Error);
+        }).ToList();
+
+        return new ImportPreviewResponse(
+            TotalRows: previews.Count,
+            ValidRows: previews.Count(p => p.Error is null),
+            ErrorRows: previews.Count(p => p.Error is not null),
+            DuplicateRows: previews.Count(p => p.IsDuplicate),
+            Rows: previews);
+    }
+
+    /// <summary>
+    /// Inserta las filas que el cliente confirmó importar (después de que el usuario revisó
+    /// la previsualización y descartó filas fila por fila, US-11). Fuente = CsvImport.
+    /// </summary>
+    [HttpPost("import/confirm")]
+    public async Task<ActionResult<ImportConfirmResponse>> ConfirmImport(ImportConfirmRequest request)
+    {
+        if (request.Rows.Count == 0)
+            return BadRequest("No hay filas para importar.");
+
+        var accountId = request.AccountId ?? await GetOrCreateDefaultAccountIdAsync();
+
+        if (!await db.Accounts.AnyAsync(a => a.Id == accountId && a.UserId == CurrentUserId))
+            return BadRequest("La cuenta indicada no existe o no te pertenece.");
+
+        var categoryIds = request.Rows
+            .Where(r => r.CategoryId is not null)
+            .Select(r => r.CategoryId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (categoryIds.Count > 0)
+        {
+            var validCount = await db.Categories
+                .CountAsync(c => categoryIds.Contains(c.Id) && (c.UserId == null || c.UserId == CurrentUserId));
+
+            if (validCount != categoryIds.Count)
+                return BadRequest("Alguna de las categorías indicadas no existe o no te pertenece.");
+        }
+
+        var transactions = request.Rows.Select(r => new Transaction
+        {
+            UserId = CurrentUserId,
+            AccountId = accountId,
+            CategoryId = r.CategoryId,
+            Amount = r.Amount,
+            Currency = "COP",
+            Description = r.Description,
+            Date = r.Date,
+            Source = TransactionSource.CsvImport,
+        }).ToList();
+
+        db.Transactions.AddRange(transactions);
+        await db.SaveChangesAsync();
+
+        var ids = transactions.Select(t => t.Id).ToList();
+        var responses = await db.Transactions
+            .Where(t => ids.Contains(t.Id))
+            .OrderByDescending(t => t.Date)
+            .Select(ProjectToResponse)
+            .ToListAsync();
+
+        return new ImportConfirmResponse(responses.Count, responses);
+    }
 
     private static readonly System.Linq.Expressions.Expression<Func<Transaction, TransactionResponse>> ProjectToResponse =
         t => new TransactionResponse(

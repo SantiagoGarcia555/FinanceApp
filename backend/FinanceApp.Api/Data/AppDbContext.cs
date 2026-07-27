@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<CategorizationRule> CategorizationRules => Set<CategorizationRule>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<HiddenCategory> HiddenCategories => Set<HiddenCategory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -102,6 +103,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<RefreshToken>()
             .HasIndex(rt => rt.Token)
+            .IsUnique();
+
+        // --- Categoría oculta (categorías del sistema no se eliminan, se ocultan por usuario) ---
+        modelBuilder.Entity<HiddenCategory>()
+            .HasOne(h => h.User)
+            .WithMany()
+            .HasForeignKey(h => h.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<HiddenCategory>()
+            .HasOne(h => h.Category)
+            .WithMany()
+            .HasForeignKey(h => h.CategoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<HiddenCategory>()
+            .HasIndex(h => new { h.UserId, h.CategoryId })
             .IsUnique();
 
         // --- Datos semilla: categorías predefinidas del sistema (US-08) ---

@@ -285,7 +285,7 @@ namespace FinanceApp.Api.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("Date")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("date");
 
                     b.Property<string>("Description")
                         .IsRequired()

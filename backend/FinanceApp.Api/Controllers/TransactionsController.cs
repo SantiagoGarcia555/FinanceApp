@@ -183,6 +183,44 @@ public class TransactionsController(AppDbContext db, IEnumerable<ITransactionFil
     }
 
     /// <summary>
+    /// Primer paso del importador: devuelve columnas, primeras filas y el mapeo sugerido,
+    /// para que el usuario confirme qué columna es fecha, monto y descripción. No guarda nada.
+    /// </summary>
+    [HttpPost("import/inspect")]
+    [RequestSizeLimit(10_000_000)]
+    public ActionResult<ImportInspectResponse> InspectImport(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest("Sube un archivo .csv o .xlsx.");
+
+        var parser = fileParsers.FirstOrDefault(p => p.CanParse(file.FileName));
+        if (parser is null)
+            return BadRequest("Formato no soportado. Sube un archivo .csv o .xlsx.");
+
+        ImportFileSample sample;
+        try
+        {
+            using var stream = file.OpenReadStream();
+            sample = parser.Sample(stream, maxRows: 5);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"No se pudo leer el archivo: {ex.Message}");
+        }
+
+        if (sample.Headers.Count == 0)
+            return BadRequest("El archivo está vacío o no tiene fila de encabezados.");
+
+        var suggestion = ImportValueParser.SuggestColumns(sample.Headers);
+        return new ImportInspectResponse(
+            sample.Headers,
+            sample.Rows,
+            suggestion.DateColumn,
+            suggestion.AmountColumn,
+            suggestion.DescriptionColumn);
+    }
+
+    /// <summary>
     /// Parsea el archivo (.csv/.xlsx) con el mapeo de columnas indicado y devuelve una
     /// previsualización, marcando filas con error y posibles duplicados (fecha+monto+descripción
     /// exactos contra transacciones ya existentes). No guarda nada en la BD (US-10/US-11).

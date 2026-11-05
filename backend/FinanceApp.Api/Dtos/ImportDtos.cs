@@ -1,5 +1,16 @@
 namespace FinanceApp.Api.Dtos;
 
+/// <summary>
+/// Respuesta de import/inspect: columnas del archivo, primeras filas (texto) y el mapeo sugerido
+/// a partir de nombres habituales ("Fecha", "Valor", "Descripción"…). Cualquiera puede ser null.
+/// </summary>
+public record ImportInspectResponse(
+    IReadOnlyList<string> Headers,
+    IReadOnlyList<IReadOnlyList<string>> SampleRows,
+    string? SuggestedDateColumn,
+    string? SuggestedAmountColumn,
+    string? SuggestedDescriptionColumn);
+
 public record ImportRowPreview(
     int RowNumber,
     DateTime? Date,

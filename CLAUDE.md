@@ -1,0 +1,71 @@
+# Finance APP — contexto para Claude
+
+App multiplataforma de finanzas personales con IA propia (consejos de ahorro, detección de anomalías, predicción de gasto). Producto con miras comerciales: Play Store → App Store, suscripción freemium/premium. Mercado inicial: Colombia/Latam. Único dev y dueño: Santiago.
+
+Repo: https://github.com/SantiagoGarcia555/FinanceApp (monorepo).
+
+## Stack (decisión final 2026-07-24 — no cambiar sin discutirlo)
+| Capa | Tecnología | Motivo |
+|---|---|---|
+| Backend | ASP.NET Core .NET 8 + EF Core 8 + PostgreSQL 16 (Npgsql) | Experiencia previa en .NET; una API para todas las plataformas |
+| Web | React 19 + Vite 8 + Tailwind v4 + TS + React Router 7, lint con oxlint | Stack que ya maneja |
+| Mobile | React Native + Expo (Android primero, iOS después) | Reutiliza React. **Sin experiencia previa en mobile** → explicar decisiones de ese mundo |
+| Desktop | Tauri empaquetando `web/` | Binarios livianos vs Electron |
+| IA | ML.NET 4 (+TimeSeries) dentro del backend | **Nada de APIs de LLM de pago** en esta etapa (evitar costos variables) |
+| Open Banking (fase 3) | Belvo (Latam); Salt Edge/Tink/TrueLayer si va a Europa | Detrás de `IBankProviderAdapter` |
+
+## Estructura
+```
+backend/FinanceApp.Api/   Auth/ Controllers/ Data/ Dtos/ Migrations/ Models/ Services/
+web/                      scaffold Vite (solo pantalla placeholder)
+mobile/, desktop/         solo README con pasos de inicialización (no inicializados)
+docs/                     ARCHITECTURE.md, EDT (.xlsx), spec MVP, ERD, privacidad, seguridad (.docx)
+contexto-finance-app.md   ficha del proyecto para el portafolio (no es instrucción técnica)
+```
+
+## Comandos
+- BD local: `docker compose up -d` (Postgres 16, user/db `financeapp`, puerto 5432). `docker compose down -v` borra datos → hay que re-registrar el usuario de prueba.
+- API: `cd backend/FinanceApp.Api && dotnet run` → Swagger en dev. URLs: https://localhost:64347 / http://localhost:64348
+- Migraciones: `dotnet ef migrations add <Nombre>` y `dotnet ef database update` (desde `backend/FinanceApp.Api`).
+- Web: `cd web && npm install && npm run dev` (puerto 5173). `npm run lint`, `npm run build`.
+- `appsettings.Development.json` está en .gitignore (cadena de conexión + `Jwt:SecretKey`). No commitear secretos.
+
+## API actual (4 controladores, 19 endpoints, todo bajo JWT salvo auth)
+- `api/auth`: register, login, refresh, logout (refresh tokens persistidos, rotativos y revocables).
+- `api/transactions`: CRUD con filtros (fechas, categoría, cuenta, monto, tipo) + paginación; `import/preview` y `import/confirm` (CSV/Excel, mapeo de columnas, errores por fila, duplicados por fecha+monto+descripción normalizada).
+- `api/categories`: CRUD + `{id}/unhide`. 13 categorías del sistema (`UserId` null, Ids fijos vía `HasData`); "borrar" una del sistema = ocultarla por usuario (`HiddenCategory`).
+- `api/dashboard`: `summary` (mes) y `trend` (hasta 24 meses).
+- Entidades: User, Account, Transaction, Category, Budget, CategorizationRule, RefreshToken, HiddenCategory.
+
+## Convenciones y gotchas
+- Usuario actual: `MapInboundClaims = false`; leer `sub` con `User.FindFirst("sub")` (no `FindFirstValue`, no `NameIdentifier`).
+- **Toda consulta filtra por el usuario del JWT** y valida que cuenta/categoría le pertenezcan.
+- `Transaction.Date` es columna `date` pura (Npgsql 8 exige `Kind=Utc` en `timestamptz`).
+- Parsers de archivo: patrón estrategia con `ITransactionFileParser` (se resuelve por extensión). Nuevo formato = nueva clase, sin tocar el controlador.
+- Puertos de fases futuras: `ISavingsInsightService` (ML.NET) e `IBankProviderAdapter`. No acoplar el núcleo a proveedores.
+- Commits: Conventional Commits en español con el id de tarea de la EDT, ej. `feat(backend): CRUD de categorías (1.1.3)`. Al cerrar una tarea, commit aparte `docs: marcar tarea X.Y.Z (...) como Completado` actualizando `docs/Finance_APP_EDT.xlsx`.
+
+## Estado actual (actualizar al cerrar trabajo relevante)
+- Fase 0 (setup): completa.
+- Fase 1 / backend MVP: 6 de 7 tareas listas (1.1.1–1.1.6). Pendiente: tests unitarios.
+- Brechas vs spec: falta bloqueo temporal tras 5 intentos fallidos de login (US-02); sin CI (`.github/workflows` vacío).
+- Web: scaffold + tokens de diseño "Raíz × Aurora" en `web/src/styles/tokens.css` (Tailwind v4 `@theme`, paleta por defecto deshabilitada: usar solo clases del sistema como `bg-canvas`, `text-fg-muted`, `type-h1`). Fuentes Fraunces + DM Sans self-hosted (Fontsource). Componentes de la librería en `web/src/components/ui/` (Button, Chip, IconButton, Avatar, BudgetRing, LegendItem, SectionHeader, TransactionRow, InsightCard, BottomNav; íconos lucide-react). Router (React Router 7) en `App.tsx`: `/ingresar` y `/registro` (públicas), `/` dashboard con **datos reales** de la API, `/perfil` (cerrar sesión), `/fundamentos` catálogo vivo de componentes, resto "próximamente". Animaciones en `styles/motion.css` (respeta prefers-reduced-motion).
+- Movimientos (`features/transactions/`): `/movimientos` con mes, filtros tipo/categoría, agrupado por día y paginación "Cargar más"; crear/editar/eliminar en hoja inferior (`Sheet` sobre `<dialog>`) abierta desde el `+` de la nav en cualquier pantalla. `TransactionsProvider` comparte categorías y un `version` que recarga dashboard y lista al guardar.
+- Web ↔ API: `web/src/api/client.ts` (access token en memoria; refresh rotativo en **cookie HttpOnly** `fa_refresh` — Secure, SameSite=Strict, Path=/api/auth — que la API pone cuando el cliente manda `X-Auth-Transport: cookie`; sin ese header (móvil) el token sigue viajando en el body. En localStorage solo queda la pista `finance-app.has-session`. Refresh *single-flight* ante 401 — necesario por StrictMode y la rotación). El target del proxy se puede cambiar con `API_PROXY_TARGET`. Sesión en `auth/AuthProvider.tsx` + guards `RequireAuth`/`PublicOnly`. El proxy de Vite apunta a **https://localhost:64347** (`secure: false`); no usar el puerto HTTP 64348 porque `UseHttpsRedirection` responde 307 y el navegador sale del proxy. Mientras no existan endpoints de presupuestos ni de insights (fase 2), el dashboard muestra "% de ingresos gastado" + top 3 categorías y un insight calculado (categoría con más gasto), sin datos inventados. Diseño en Figma: ver memoria `project_identidad_visual.md`. Mobile y desktop: sin inicializar.
+- Último commit: 2026-07-27.
+
+## Roadmap
+0 Setup → 1 MVP Android+Web (manual + import CSV/Excel) → 2 IA ML.NET → 3 Open Banking (Belvo) → 4 iOS + Tauri → 5 monetización y publicación. EDT: ~50 semanas a 25–30 h/semana (estimación, no medición).
+Google Wallet **no** tiene API pública para leer transacciones de terceros; alternativas: CSV, `NotificationListenerService` (frágil) u Open Banking.
+
+## Cómo trabajar con Santiago
+- Español, preciso y concreto, algo informal está bien, sin perder términos técnicos.
+- Dar recomendaciones técnicas concretas para que él decida, no preguntas abiertas.
+- Estimaciones: ser agresivo en config, scaffolding, CRUD y UI sobre componentes hechos (ej. scaffolding React 6–8 h, librería de componentes base 10–12 h). Mostrar tabla: estimado anterior | nuevo | criterio.
+- Planeación en jerarquía Azure DevOps: Epic → Feature (por fase) → Product Backlog Item → Task.
+
+## Memoria compartida (CLI ↔ Cowork)
+- La auto-memoria de Claude Code está redirigida a `.claude/memory/` (ver `.claude/settings.local.json`). Esa misma carpeta la lee y escribe Claude en el proyecto de Cowork "Finance APP", así que es la memoria común.
+- Mantener `.claude/memory/MEMORY.md` como índice corto (una línea por archivo); el detalle va en archivos por tema con frontmatter (`name`, `description`, `metadata.type`).
+- Decisiones de arquitectura/stack → memoria **y** este CLAUDE.md (o `docs/ARCHITECTURE.md`). Cambios de estado → sección "Estado actual".
+- No guardar secretos reales en memoria; solo credenciales de dev local.

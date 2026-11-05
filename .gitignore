@@ -11,3 +11,8 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Claude Code (local)
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/memory/

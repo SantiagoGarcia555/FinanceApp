@@ -1,0 +1,89 @@
+/*
+ * Movimiento de la identidad Raíz × Aurora (misma coreografía que el prototipo de Figma).
+ * Uso: class="animate-rise" + style={delay(300)} para escalonar.
+ */
+
+@theme {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Entrada: sube y aparece */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise-from, 24px));
+  }
+}
+@utility animate-rise {
+  animation: rise 650ms var(--ease-out-soft) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Anillo de presupuesto que se dibuja (anima desde vacío hasta su dashoffset final) */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+}
+@utility animate-ring {
+  animation: ring-draw 1200ms var(--ease-out-soft) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Formas orgánicas del fondo que giran y respiran */
+@keyframes drift {
+  from {
+    transform: rotate(0deg) scale(0.92);
+  }
+  to {
+    transform: rotate(-40deg) scale(1.06);
+  }
+}
+@utility animate-drift {
+  animation: drift 12s ease-in-out infinite alternate;
+}
+
+/* Nav inferior que entra con resorte */
+@keyframes nav-in {
+  from {
+    transform: translateY(140%);
+  }
+}
+@utility animate-nav-in {
+  animation: nav-in 800ms var(--ease-spring) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Halo que pulsa en la tarjeta de IA */
+@keyframes halo {
+  50% {
+    box-shadow: 0 20px 52px -8px rgb(31 61 43 / 0.45);
+  }
+}
+@utility animate-halo {
+  animation: halo 3s ease-in-out infinite;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Hoja inferior que sube */
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@utility animate-sheet-in {
+  animation: sheet-in 420ms var(--ease-out-soft) both;
+}
+
+/* Accesibilidad: sin movimiento si el sistema lo pide */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}

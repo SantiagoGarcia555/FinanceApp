@@ -7,10 +7,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      // Redirige las llamadas a la API hacia el backend ASP.NET Core en desarrollo
+      // Redirige las llamadas a la API hacia el backend ASP.NET Core en desarrollo.
+      // Se usa HTTPS (64347) porque la API hace UseHttpsRedirection: apuntar al puerto HTTP (64348)
+      // devuelve un 307 que el navegador seguiría fuera del proxy (CORS).
+      // `secure: false` acepta el certificado de desarrollo de .NET.
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.API_PROXY_TARGET ?? 'https://localhost:64347',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

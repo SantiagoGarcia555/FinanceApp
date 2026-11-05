@@ -1,21 +1,66 @@
-function App() {
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <h1 className="text-xl font-semibold">Finance APP</h1>
-        <p className="text-sm text-slate-500">
-          Panel web · consume la misma API que la app móvil
-        </p>
-      </header>
+import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom'
+import { AuthProvider } from './auth/AuthProvider'
+import { PublicOnly, RequireAuth } from './auth/guards'
+import { BottomNav } from './components/ui'
+import { LoginPage } from './features/auth/LoginPage'
+import { RegisterPage } from './features/auth/RegisterPage'
+import { DashboardPage } from './features/dashboard/DashboardPage'
+import { MovementsPage } from './features/transactions/MovementsPage'
+import { useTransactions } from './features/transactions/TransactionsContext'
+import { TransactionsProvider } from './features/transactions/TransactionsProvider'
+import { ComingSoonPage } from './pages/ComingSoonPage'
+import { FoundationsPage } from './pages/FoundationsPage'
+import { ProfilePage } from './pages/ProfilePage'
 
-      <main className="mx-auto max-w-4xl px-6 py-10">
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
-          Placeholder — conectar aquí el dashboard de transacciones,
-          presupuestos e insights de ahorro (fase MVP).
-        </div>
-      </main>
-    </div>
+/** El botón + de la nav abre el formulario de nuevo movimiento desde cualquier pantalla. */
+function Nav() {
+  const { openNew } = useTransactions()
+  return <BottomNav onAdd={openNew} />
+}
+
+/** Layout de la app autenticada: contenido + nav inferior flotante + formulario de movimientos. */
+function AppLayout() {
+  return (
+    <TransactionsProvider>
+      <Outlet />
+      <Nav />
+    </TransactionsProvider>
   )
 }
 
-export default App
+const router = createBrowserRouter([
+  {
+    element: <PublicOnly />,
+    children: [
+      { path: 'ingresar', element: <LoginPage /> },
+      { path: 'registro', element: <RegisterPage /> },
+    ],
+  },
+  {
+    element: <RequireAuth />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'analisis', element: <ComingSoonPage title="Análisis" /> },
+          { path: 'billetera', element: <ComingSoonPage title="Billetera" /> },
+          { path: 'perfil', element: <ProfilePage /> },
+          { path: 'movimientos', element: <MovementsPage /> },
+          { path: 'importar', element: <ComingSoonPage title="Importar extracto" /> },
+        ],
+      },
+    ],
+  },
+  // Catálogo de fundamentos y componentes (equivale a la página "Componentes" de Figma)
+  { path: 'fundamentos', element: <FoundationsPage /> },
+  { path: '*', element: <ComingSoonPage title="Página no encontrada" /> },
+])
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  )
+}

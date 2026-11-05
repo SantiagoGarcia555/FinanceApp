@@ -1,0 +1,190 @@
+/*
+ * Tokens de diseño — identidad "Raíz × Aurora" (librería v1).
+ * Fuente de verdad: Figma › Finance APP — Exploración de identidad › Variables
+ *   https://www.figma.com/design/IbERtn5UyeCwtbz3Mizpr4
+ *
+ * Capas (igual que en Figma):
+ *   1. Primitivos  (--raiz-*)  → valores crudos. NO usar directo en componentes.
+ *   2. Semánticos  (--color-*, --space-*, --radius-*) → mismos nombres que el
+ *      "code syntax" de las variables de Figma, para que Dev Mode y el código
+ *      coincidan 1:1. Un modo oscuro futuro solo redefine esta capa.
+ *   3. Tema Tailwind (@theme inline) → alias cortos para las clases:
+ *      bg-canvas, text-fg-muted, border-line, rounded-lg, shadow-card…
+ */
+
+/* ---------- 1. Primitivos ---------- */
+:root {
+  --raiz-crema-100: #fffdf9;
+  --raiz-crema-200: #f6efe4;
+  --raiz-arena-200: #efe3ce;
+  --raiz-arena-300: #e8d5b5;
+  --raiz-arena-500: #8a7b6b;
+  --raiz-tinta-900: #2a211b;
+  --raiz-bosque-100: #dce3d6;
+  --raiz-bosque-700: #1f3d2b;
+  --raiz-terracota-100: #f7dccf;
+  --raiz-terracota-500: #d9653b;
+  --raiz-sol-100: #fbe9c4;
+  --raiz-sol-400: #f2b33d;
+}
+
+/* ---------- 2. Semánticos (modo Claro) ---------- */
+/* Color como dato: bosque = a favor / ingresos / IA · terracota = alerta · sol = progreso / metas */
+:root {
+  color-scheme: light;
+
+  --color-bg-canvas: var(--raiz-crema-200);
+  --color-bg-surface: var(--raiz-crema-100);
+  --color-bg-subtle: var(--raiz-arena-200);
+  --color-bg-decor: var(--raiz-arena-300);
+  --color-bg-brand: var(--raiz-bosque-700);
+  --color-bg-brand-subtle: var(--raiz-bosque-100);
+  --color-bg-accent: var(--raiz-terracota-500);
+  --color-bg-accent-subtle: var(--raiz-terracota-100);
+  --color-bg-progress: var(--raiz-sol-400);
+  --color-bg-progress-subtle: var(--raiz-sol-100);
+
+  --color-text-primary: var(--raiz-tinta-900);
+  --color-text-secondary: var(--raiz-arena-500);
+  --color-text-brand: var(--raiz-bosque-700);
+  --color-text-accent: var(--raiz-terracota-500);
+  --color-text-on-brand: var(--raiz-crema-200);
+  --color-text-on-accent: var(--raiz-crema-100);
+
+  --color-icon-primary: var(--raiz-tinta-900);
+  --color-icon-secondary: var(--raiz-arena-500);
+  --color-icon-brand: var(--raiz-bosque-700);
+  --color-icon-on-brand: var(--raiz-crema-200);
+  --color-icon-on-accent: var(--raiz-crema-100);
+  --color-icon-on-progress: var(--raiz-bosque-700);
+
+  --color-border-subtle: var(--raiz-arena-300);
+  --color-border-on-brand: var(--raiz-crema-200);
+
+  /* Espaciado: idéntico a la escala de Tailwind (p-1 = 4px … p-8 = 32px). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+}
+
+/* ---------- 3. Tema Tailwind v4 ---------- */
+@theme {
+  /* Sin paleta por defecto (slate, blue…): solo existen los colores del sistema. */
+  --color-*: initial;
+
+  --font-*: initial;
+  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-sans: "DM Sans Variable", system-ui, sans-serif;
+
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-xl: 32px;
+
+  --shadow-card: 0 12px 32px -4px rgb(90 58 30 / 0.12);
+  --shadow-fab: 0 8px 18px -2px rgb(217 101 59 / 0.4);
+  --shadow-ia: 0 14px 30px -8px rgb(31 61 43 / 0.35);
+}
+
+/* `inline` hace que las clases apunten a la variable semántica (no al valor),
+   así un futuro [data-theme="dark"] cambia todo sin regenerar CSS. */
+@theme inline {
+  --color-canvas: var(--color-bg-canvas);
+  --color-surface: var(--color-bg-surface);
+  --color-subtle: var(--color-bg-subtle);
+  --color-decor: var(--color-bg-decor);
+  --color-brand: var(--color-bg-brand);
+  --color-brand-subtle: var(--color-bg-brand-subtle);
+  --color-accent: var(--color-bg-accent);
+  --color-accent-subtle: var(--color-bg-accent-subtle);
+  --color-progress: var(--color-bg-progress);
+  --color-progress-subtle: var(--color-bg-progress-subtle);
+
+  --color-fg: var(--color-text-primary);
+  --color-fg-muted: var(--color-text-secondary);
+  --color-fg-brand: var(--color-text-brand);
+  --color-fg-accent: var(--color-text-accent);
+  --color-fg-on-brand: var(--color-text-on-brand);
+  --color-fg-on-accent: var(--color-text-on-accent);
+
+  --color-icon: var(--color-icon-primary);
+  --color-icon-muted: var(--color-icon-secondary);
+  --color-icon-brand: var(--color-icon-brand);
+  --color-icon-on-brand: var(--color-icon-on-brand);
+  --color-icon-on-accent: var(--color-icon-on-accent);
+  --color-icon-on-progress: var(--color-icon-on-progress);
+
+  --color-line: var(--color-border-subtle);
+  --color-line-on-brand: var(--color-border-on-brand);
+}
+
+/* ---------- Estilos de texto (= Text styles de Figma) ---------- */
+@utility type-monto {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 48px;
+  line-height: 56px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+@utility type-h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+}
+@utility type-h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+@utility type-h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 24px;
+}
+@utility type-quote {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 25px;
+}
+@utility type-body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 22px;
+}
+@utility type-body-sm {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 18px;
+}
+@utility type-label {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 20px;
+}
+@utility type-label-sm {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 16px;
+}
+@utility type-caption {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+}

@@ -5,6 +5,7 @@ import { BottomNav } from './components/ui'
 import { LoginPage } from './features/auth/LoginPage'
 import { RegisterPage } from './features/auth/RegisterPage'
 import { BudgetsPage } from './features/budgets/BudgetsPage'
+import { CategoriesPage } from './features/categories/CategoriesPage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { ImportPage } from './features/import/ImportPage'
 import { MovementsPage } from './features/transactions/MovementsPage'
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
           { path: 'movimientos', element: <MovementsPage /> },
           { path: 'importar', element: <ImportPage /> },
           { path: 'presupuestos', element: <BudgetsPage /> },
+          { path: 'categorias', element: <CategoriesPage /> },
         ],
       },
     ],

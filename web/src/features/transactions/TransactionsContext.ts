@@ -14,6 +14,8 @@ export interface TransactionsContextValue {
   version: number
   /** Avisa que los movimientos cambiaron por otra vía (p. ej. una importación). */
   notifyChanged: () => void
+  /** Vuelve a cargar las categorías (tras crear, editar, ocultar o mostrar una). */
+  refreshCategories: () => void
 }
 
 export const TransactionsContext = createContext<TransactionsContextValue | null>(null)

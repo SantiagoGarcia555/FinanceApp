@@ -66,6 +66,19 @@
   animation-delay: var(--delay, 0ms);
 }
 
+/* Barras de gráficos que crecen desde la base (SVG) */
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+@utility animate-bar {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: bar-grow 700ms var(--ease-out-soft) both;
+  animation-delay: var(--delay, 0ms);
+}
+
 /* Hoja inferior que sube */
 @keyframes sheet-in {
   from {

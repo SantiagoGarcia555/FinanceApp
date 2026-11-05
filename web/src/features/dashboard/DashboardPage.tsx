@@ -15,17 +15,16 @@ import {
   LegendItem,
   SectionHeader,
   TransactionRow,
-  type LegendTone,
 } from '../../components/ui'
 import { cn } from '../../lib/cn'
 import { formatCompactMoney, formatMoney, formatMonthName, formatNumber, formatPercent, formatRelativeDay, formatToday } from '../../lib/format'
 import { delay } from '../../lib/motion'
 import { useTransactions } from '../transactions/TransactionsContext'
+import { CategoryBreakdown } from './CategoryBreakdown'
 import { loadDashboard, type DashboardData } from './dashboardData'
+import { TrendChart } from './TrendChart'
 
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: DashboardData }
-
-const LEGEND_TONES: LegendTone[] = ['accent', 'progress', 'brand']
 
 /** Entrada escalonada: retardo + distancia desde la que sube. */
 function rise(ms: number, from = 24): CSSProperties {
@@ -149,12 +148,11 @@ function Dashboard({
   const spent = Math.abs(summary.totalExpense)
   const negative = summary.balance < 0
 
-  const trend =
-    previousMonth && previousMonth.balance !== 0
-      ? ((summary.balance - previousMonth.balance) / Math.abs(previousMonth.balance)) * 100
-      : null
+  // US-12: comparación simple del GASTO total con el mes anterior
+  const prevSpent = previousMonth ? Math.abs(previousMonth.totalExpense) : 0
+  const expenseChange = prevSpent > 0 ? ((spent - prevSpent) / prevSpent) * 100 : null
+  const hasTrend = data.trend.filter((m) => m.totalIncome !== 0 || m.totalExpense !== 0).length >= 2
 
-  const topCategories = summary.expensesByCategory.slice(0, 3)
   const top = summary.expensesByCategory[0]
   const topShare = top && spent > 0 ? Math.round((top.total / spent) * 100) : 0
 
@@ -196,18 +194,19 @@ function Dashboard({
         </p>
         {hasActivity && (
           <div className="animate-rise flex flex-wrap gap-2 pt-2" style={rise(750, 12)}>
-            {trend !== null && (
-              <Chip tone={trend >= 0 ? 'positive' : 'alert'} icon={trend >= 0 ? ArrowUpRight : ArrowDownRight}>
-                {formatPercent(Math.abs(trend))} vs {previousMonthShort(summary.month)}
+            {spent > 0 && <Chip>Gastos del mes: {formatCompactMoney(spent)}</Chip>}
+            {expenseChange !== null && (
+              // Gastar más es alerta (terracota); gastar menos, a favor (bosque)
+              <Chip tone={expenseChange > 0 ? 'alert' : 'positive'} icon={expenseChange > 0 ? ArrowUpRight : ArrowDownRight}>
+                {formatPercent(Math.abs(expenseChange))} {expenseChange > 0 ? 'más' : 'menos'} que {previousMonthShort(summary.month)}
               </Chip>
             )}
-            {spent > 0 && <Chip>Gastos del mes: {formatCompactMoney(spent)}</Chip>}
           </div>
         )}
       </section>
 
-      {/* Presupuesto del mes; sin presupuestos, gasto por categoría vs ingresos */}
-      {monthlyBudgets.length > 0 ? (
+      {/* Presupuesto del mes */}
+      {monthlyBudgets.length > 0 && (
         <section
           aria-labelledby="gastos"
           className="animate-rise flex items-center gap-5 rounded-lg bg-surface p-5 shadow-card"
@@ -235,34 +234,6 @@ function Dashboard({
             </ul>
           </div>
         </section>
-      ) : topCategories.length > 0 && (
-        <section
-          aria-labelledby="gastos"
-          className="animate-rise flex items-center gap-5 rounded-lg bg-surface p-5 shadow-card"
-          style={rise(900, 30)}
-        >
-          {summary.totalIncome > 0 && (
-            <BudgetRing
-              percent={(spent / summary.totalIncome) * 100}
-              label="gastado"
-              description="de tus ingresos ya gastado"
-              animationDelay={1000}
-            />
-          )}
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <h2 id="gastos" className="type-h3">
-              {formatMonthName(summary.month)}
-            </h2>
-            <ul className="flex flex-col gap-3">
-              {topCategories.map((c, i) => (
-                <LegendItem key={c.categoryId ?? c.categoryName} tone={LEGEND_TONES[i]} label={c.categoryName} value={formatCompactMoney(c.total)} />
-              ))}
-            </ul>
-            <Link to="/presupuestos" className="type-label-sm text-fg-accent hover:underline">
-              Definir presupuestos
-            </Link>
-          </div>
-        </section>
       )}
 
       {/* Sugerencia: calculada de los datos reales hasta que llegue ISavingsInsightService (fase 2) */}
@@ -286,6 +257,33 @@ function Dashboard({
             />
           </div>
         )
+      )}
+
+      {/* US-12: gasto del mes por categoría (siempre, con o sin presupuestos) */}
+      {spent > 0 && (
+        <section aria-labelledby="por-categoria" className="animate-rise flex flex-col gap-4 rounded-lg bg-surface p-5 shadow-card" style={rise(1450, 30)}>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 id="por-categoria" className="type-h3">
+              Gasto por categoría
+            </h2>
+            {monthlyBudgets.length === 0 && (
+              <Link to="/presupuestos" className="type-label-sm text-fg-accent hover:underline">
+                Definir presupuestos
+              </Link>
+            )}
+          </div>
+          <CategoryBreakdown categories={summary.expensesByCategory} />
+        </section>
+      )}
+
+      {/* Tendencia de ingresos vs gastos */}
+      {hasTrend && (
+        <section aria-labelledby="tendencia" className="animate-rise flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-card" style={rise(1550, 30)}>
+          <h2 id="tendencia" className="type-h3">
+            Últimos {data.trend.length} meses
+          </h2>
+          <TrendChart months={data.trend} animationDelay={1700} />
+        </section>
       )}
 
       {/* Movimientos recientes */}

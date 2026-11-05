@@ -15,6 +15,8 @@ export interface DashboardData {
   summary: MonthlySummaryResponse
   /** Mes anterior (de api/dashboard/trend). null si no tuvo movimientos. */
   previousMonth: MonthlyTrendPoint | null
+  /** Últimos 6 meses, del más antiguo al actual. */
+  trend: MonthlyTrendPoint[]
   /** GET api/transactions (las más recientes; la API ordena por fecha descendente). */
   recentTransactions: TransactionResponse[]
   /** categoryId → clave de ícono (GET api/categories). */
@@ -38,7 +40,7 @@ export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData
   const month = currentMonth()
   const [summary, trend, transactions, categories, budgets] = await Promise.all([
     api<MonthlySummaryResponse>(`/api/dashboard/summary?month=${month}`, { signal }),
-    api<TrendResponse>('/api/dashboard/trend?months=2', { signal }),
+    api<TrendResponse>('/api/dashboard/trend?months=6', { signal }),
     api<PagedResult<TransactionResponse>>('/api/transactions?page=1&pageSize=5', { signal }),
     api<CategoryResponse[]>('/api/categories', { signal }),
     listBudgets(month, signal),
@@ -49,6 +51,7 @@ export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData
   return {
     summary,
     previousMonth: prev && (prev.totalIncome !== 0 || prev.totalExpense !== 0) ? prev : null,
+    trend: trend.months,
     recentTransactions: transactions.items,
     categoryIcons: Object.fromEntries(categories.map((c) => [c.id, c.icon])),
     budgets,

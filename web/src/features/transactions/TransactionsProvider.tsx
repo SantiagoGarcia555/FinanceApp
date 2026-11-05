@@ -6,6 +6,7 @@ import { TransactionSheet } from './TransactionSheet'
 
 export function TransactionsProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<CategoryResponse[]>([])
+  const [categoriesKey, setCategoriesKey] = useState(0)
   const [version, setVersion] = useState(0)
   const [sheet, setSheet] = useState<{ open: boolean; editing: TransactionResponse | null; key: number }>({
     open: false,
@@ -21,6 +22,12 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
         // sin categorías el formulario sigue funcionando ("Sin categoría")
       })
     return () => controller.abort()
+  }, [categoriesKey])
+
+  // Cambiar categorías afecta nombres en listas, dashboard y presupuestos: también recarga las vistas
+  const refreshCategories = useCallback(() => {
+    setCategoriesKey((k) => k + 1)
+    setVersion((v) => v + 1)
   }, [])
 
   const openNew = useCallback(() => setSheet((s) => ({ open: true, editing: null, key: s.key + 1 })), [])
@@ -40,8 +47,9 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       openEdit,
       version,
       notifyChanged,
+      refreshCategories,
     }),
-    [categories, openNew, openEdit, version, notifyChanged],
+    [categories, openNew, openEdit, version, notifyChanged, refreshCategories],
   )
 
   return (

@@ -4,6 +4,8 @@ const tones = {
   brand: 'bg-brand',
   progress: 'bg-progress',
   accent: 'bg-accent',
+  /** Dato informativo sin juicio (p. ej. reparto del gasto por categoría). */
+  neutral: 'bg-fg/75',
 } as const
 
 export interface ProgressBarProps {

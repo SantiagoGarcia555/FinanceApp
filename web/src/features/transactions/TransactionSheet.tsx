@@ -42,7 +42,7 @@ function TransactionForm({ editing, categories, onSaved }: { editing: Transactio
   const [description, setDescription] = useState(editing?.description ?? '')
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? '')
   const [date, setDate] = useState(() => (editing ? editing.date.slice(0, 10) : toIsoDate(new Date())))
-  const [errors, setErrors] = useState<{ amount?: string; description?: string; date?: string }>({})
+  const [errors, setErrors] = useState<{ amount?: string; description?: string; date?: string; category?: string }>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'save' | 'delete' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -66,6 +66,7 @@ function TransactionForm({ editing, categories, onSaved }: { editing: Transactio
     const next: typeof errors = {}
     if (amount <= 0) next.amount = 'Escribe un monto mayor a cero.'
     if (!description.trim()) next.description = 'Cuéntanos qué fue (p. ej. "Mercado").'
+    if (!categoryId) next.category = 'Elige una categoría.' // US-04: obligatoria en el registro manual
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) next.date = 'Elige una fecha.'
     setErrors(next)
     setFormError(null)
@@ -163,8 +164,16 @@ function TransactionForm({ editing, categories, onSaved }: { editing: Transactio
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <SelectField label="Categoría" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">Sin categoría</option>
+        <SelectField
+          label="Categoría"
+          value={categoryId}
+          error={errors.category}
+          onChange={(e) => {
+            setCategoryId(e.target.value)
+            setErrors((er) => ({ ...er, category: undefined }))
+          }}
+        >
+          <option value="">Elegir categoría…</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}

@@ -81,6 +81,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(b => b.LimitAmount)
             .HasPrecision(18, 2);
 
+        // Un presupuesto por categoría y periodo para cada usuario.
+        modelBuilder.Entity<Budget>()
+            .HasIndex(b => new { b.UserId, b.CategoryId, b.Period })
+            .IsUnique();
+
         // --- Regla de categorizacion ---
         modelBuilder.Entity<CategorizationRule>()
             .HasOne(r => r.User)

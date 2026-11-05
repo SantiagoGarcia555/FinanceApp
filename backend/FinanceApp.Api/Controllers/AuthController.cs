@@ -16,9 +16,11 @@ public class AuthController(
     AppDbContext db,
     ITokenService tokenService,
     IOptions<JwtOptions> jwtOptions,
+    IOptions<LoginLockoutOptions> lockoutOptions,
     IPasswordHasher<User> passwordHasher) : ControllerBase
 {
     private readonly JwtOptions _jwtOptions = jwtOptions.Value;
+    private readonly LoginLockoutOptions _lockout = lockoutOptions.Value;
 
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
@@ -68,11 +70,42 @@ public class AuthController(
         if (user is null)
             return Unauthorized("Email o contraseña incorrectos.");
 
+        // US-02: mientras dure el bloqueo no se verifica la contraseña (ni siquiera la correcta pasa).
+        var now = DateTime.UtcNow;
+        if (user.LockoutEndAt is { } lockoutEnd && lockoutEnd > now)
+            return LockedOut(lockoutEnd - now);
+
         var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (result == PasswordVerificationResult.Failed)
-            return Unauthorized("Email o contraseña incorrectos.");
+        {
+            user.FailedLoginAttempts++;
 
-        return await IssueTokensAsync(user);
+            if (user.FailedLoginAttempts >= _lockout.MaxFailedAttempts)
+            {
+                user.FailedLoginAttempts = 0;
+                user.LockoutEndAt = now.AddMinutes(_lockout.LockoutMinutes);
+                await db.SaveChangesAsync();
+                return LockedOut(TimeSpan.FromMinutes(_lockout.LockoutMinutes));
+            }
+
+            await db.SaveChangesAsync();
+            return Unauthorized("Email o contraseña incorrectos.");
+        }
+
+        user.FailedLoginAttempts = 0;
+        user.LockoutEndAt = null;
+
+        return await IssueTokensAsync(user); // guarda también el reinicio del contador
+    }
+
+    /// <summary>429 + Retry-After (segundos) con un mensaje que el usuario entiende.</summary>
+    private ObjectResult LockedOut(TimeSpan remaining)
+    {
+        var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
+        Response.Headers.RetryAfter = ((int)Math.Ceiling(remaining.TotalSeconds)).ToString();
+        return StatusCode(
+            StatusCodes.Status429TooManyRequests,
+            $"Demasiados intentos fallidos. Por seguridad, espera {minutes} {(minutes == 1 ? "minuto" : "minutos")} e intenta de nuevo.");
     }
 
     [HttpPost("refresh")]

@@ -78,12 +78,19 @@ public class AuthController(
     [HttpPost("refresh")]
     public async Task<ActionResult<AuthResponse>> Refresh(RefreshRequest request)
     {
+        var token = request.RefreshToken ?? RefreshTokenCookie.Read(Request);
+        if (string.IsNullOrWhiteSpace(token))
+            return Unauthorized("Refresh token inválido o expirado.");
+
         var existing = await db.RefreshTokens
             .Include(rt => rt.User)
-            .SingleOrDefaultAsync(rt => rt.Token == request.RefreshToken);
+            .SingleOrDefaultAsync(rt => rt.Token == token);
 
         if (existing is null || !existing.IsActive || existing.User is null)
+        {
+            RefreshTokenCookie.Delete(Response);
             return Unauthorized("Refresh token inválido o expirado.");
+        }
 
         // Rotación: se revoca el token usado al emitir uno nuevo.
         existing.RevokedAt = DateTime.UtcNow;
@@ -94,7 +101,13 @@ public class AuthController(
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(RefreshRequest request)
     {
-        var existing = await db.RefreshTokens.SingleOrDefaultAsync(rt => rt.Token == request.RefreshToken);
+        var token = request.RefreshToken ?? RefreshTokenCookie.Read(Request);
+        RefreshTokenCookie.Delete(Response);
+
+        if (string.IsNullOrWhiteSpace(token))
+            return NoContent();
+
+        var existing = await db.RefreshTokens.SingleOrDefaultAsync(rt => rt.Token == token);
         if (existing is not null && existing.IsActive)
         {
             existing.RevokedAt = DateTime.UtcNow;
@@ -123,9 +136,14 @@ public class AuthController(
 
         await db.SaveChangesAsync();
 
+        // Navegador: refresh token solo en cookie HttpOnly. Móvil: en el body (lo guarda en SecureStore).
+        var useCookie = RefreshTokenCookie.IsRequested(Request);
+        if (useCookie)
+            RefreshTokenCookie.Write(Response, refreshTokenValue, refreshToken.ExpiresAt);
+
         return new AuthResponse(
             accessToken,
-            refreshTokenValue,
+            useCookie ? null : refreshTokenValue,
             expiresAt,
             new UserResponse(user.Id, user.Email, user.Name, user.PreferredCurrency));
     }

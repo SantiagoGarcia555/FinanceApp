@@ -1,5 +1,7 @@
+import { listBudgets } from '../../api/budgets'
 import { api } from '../../api/client'
 import type {
+  BudgetResponse,
   CategoryResponse,
   MonthlySummaryResponse,
   MonthlyTrendPoint,
@@ -17,6 +19,8 @@ export interface DashboardData {
   recentTransactions: TransactionResponse[]
   /** categoryId → clave de ícono (GET api/categories). */
   categoryIcons: Record<string, string | null>
+  /** GET api/budgets?month=… (ordenados por % usado, de mayor a menor). */
+  budgets: BudgetResponse[]
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -27,15 +31,17 @@ export function currentMonth(now = new Date()): string {
 
 /**
  * Carga todo lo que necesita el dashboard en paralelo.
- * Pendientes de backend: presupuestos (Budget no tiene controlador) e insights de IA (fase 2);
- * mientras tanto el dashboard deriva esos bloques de los datos reales del mes.
+ * Los insights de IA llegan en la fase 2 (ISavingsInsightService); mientras tanto el dashboard
+ * los deriva de presupuestos y gastos reales del mes.
  */
 export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData> {
-  const [summary, trend, transactions, categories] = await Promise.all([
-    api<MonthlySummaryResponse>(`/api/dashboard/summary?month=${currentMonth()}`, { signal }),
+  const month = currentMonth()
+  const [summary, trend, transactions, categories, budgets] = await Promise.all([
+    api<MonthlySummaryResponse>(`/api/dashboard/summary?month=${month}`, { signal }),
     api<TrendResponse>('/api/dashboard/trend?months=2', { signal }),
     api<PagedResult<TransactionResponse>>('/api/transactions?page=1&pageSize=5', { signal }),
     api<CategoryResponse[]>('/api/categories', { signal }),
+    listBudgets(month, signal),
   ])
 
   const prev = trend.months.length >= 2 ? trend.months[trend.months.length - 2] : null
@@ -45,5 +51,6 @@ export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData
     previousMonth: prev && (prev.totalIncome !== 0 || prev.totalExpense !== 0) ? prev : null,
     recentTransactions: transactions.items,
     categoryIcons: Object.fromEntries(categories.map((c) => [c.id, c.icon])),
+    budgets,
   }
 }

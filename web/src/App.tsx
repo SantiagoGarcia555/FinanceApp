@@ -4,7 +4,9 @@ import { PublicOnly, RequireAuth } from './auth/guards'
 import { BottomNav } from './components/ui'
 import { LoginPage } from './features/auth/LoginPage'
 import { RegisterPage } from './features/auth/RegisterPage'
+import { BudgetsPage } from './features/budgets/BudgetsPage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
+import { ImportPage } from './features/import/ImportPage'
 import { MovementsPage } from './features/transactions/MovementsPage'
 import { useTransactions } from './features/transactions/TransactionsContext'
 import { TransactionsProvider } from './features/transactions/TransactionsProvider'
@@ -47,7 +49,8 @@ const router = createBrowserRouter([
           { path: 'billetera', element: <ComingSoonPage title="Billetera" /> },
           { path: 'perfil', element: <ProfilePage /> },
           { path: 'movimientos', element: <MovementsPage /> },
-          { path: 'importar', element: <ComingSoonPage title="Importar extracto" /> },
+          { path: 'importar', element: <ImportPage /> },
+          { path: 'presupuestos', element: <BudgetsPage /> },
         ],
       },
     ],

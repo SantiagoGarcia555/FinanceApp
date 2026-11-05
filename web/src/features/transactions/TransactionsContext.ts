@@ -12,6 +12,8 @@ export interface TransactionsContextValue {
   openEdit: (transaction: TransactionResponse) => void
   /** Sube cada vez que se crea, edita o elimina un movimiento: las vistas lo usan para recargar. */
   version: number
+  /** Avisa que los movimientos cambiaron por otra vía (p. ej. una importación). */
+  notifyChanged: () => void
 }
 
 export const TransactionsContext = createContext<TransactionsContextValue | null>(null)

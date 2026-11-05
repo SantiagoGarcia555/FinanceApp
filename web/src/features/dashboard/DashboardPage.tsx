@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { budgetTone } from '../../api/budgets'
 import { ArrowDownRight, ArrowUpRight, Bell, CloudOff, Sun } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
@@ -157,6 +158,31 @@ function Dashboard({
   const top = summary.expensesByCategory[0]
   const topShare = top && spent > 0 ? Math.round((top.total / spent) * 100) : 0
 
+  // Presupuestos mensuales (la API los ordena por % usado, de mayor a menor)
+  const monthlyBudgets = data.budgets.filter((b) => b.period === 'monthly')
+  const budgetLimit = monthlyBudgets.reduce((acc, b) => acc + b.limitAmount, 0)
+  const budgetSpent = monthlyBudgets.reduce((acc, b) => acc + b.spent, 0)
+  const over = monthlyBudgets.find((b) => b.percentUsed >= 100)
+  const near = monthlyBudgets.find((b) => b.percentUsed >= 80 && b.percentUsed < 100)
+
+  // Sugerencia derivada de datos reales (prioridad: presupuesto excedido > cerca del límite > mayor categoría)
+  const insight = over
+    ? {
+        message: `Te pasaste ${formatMoney(-over.remaining)} en ${over.categoryName} este mes. Revisa esos gastos o ajusta el presupuesto.`,
+        action: { label: 'Ver presupuestos', onClick: () => onNavigate('/presupuestos') },
+      }
+    : near
+      ? {
+          message: `Ya usaste el ${Math.round(near.percentUsed)}% de tu presupuesto de ${near.categoryName}. Te quedan ${formatMoney(near.remaining)} para el resto del mes.`,
+          action: { label: 'Ver presupuestos', onClick: () => onNavigate('/presupuestos') },
+        }
+      : top && topShare > 0
+        ? {
+            message: `Este mes, ${top.categoryName} se lleva el ${topShare}% de tus gastos (${formatMoney(top.total)}). Revisa si hay algo que puedas ajustar.`,
+            action: { label: 'Ver movimientos', onClick: () => onNavigate('/movimientos') },
+          }
+        : null
+
   return (
     <>
       {/* Saldo del mes */}
@@ -180,8 +206,36 @@ function Dashboard({
         )}
       </section>
 
-      {/* Gasto del mes por categoría (sustituye al presupuesto hasta que exista el endpoint) */}
-      {topCategories.length > 0 && (
+      {/* Presupuesto del mes; sin presupuestos, gasto por categoría vs ingresos */}
+      {monthlyBudgets.length > 0 ? (
+        <section
+          aria-labelledby="gastos"
+          className="animate-rise flex items-center gap-5 rounded-lg bg-surface p-5 shadow-card"
+          style={rise(900, 30)}
+        >
+          <BudgetRing
+            percent={budgetLimit ? (budgetSpent / budgetLimit) * 100 : 0}
+            label="usado"
+            description="de tu presupuesto del mes usado"
+            animationDelay={1000}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 id="gastos" className="type-h3">
+                {formatMonthName(summary.month)}
+              </h2>
+              <Link to="/presupuestos" className="type-label-sm text-fg-accent hover:underline">
+                Ver todo
+              </Link>
+            </div>
+            <ul className="flex flex-col gap-3">
+              {monthlyBudgets.slice(0, 3).map((b) => (
+                <LegendItem key={b.id} tone={budgetTone(b.percentUsed)} label={b.categoryName} value={`${Math.round(b.percentUsed)}%`} />
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : topCategories.length > 0 && (
         <section
           aria-labelledby="gastos"
           className="animate-rise flex items-center gap-5 rounded-lg bg-surface p-5 shadow-card"
@@ -204,6 +258,9 @@ function Dashboard({
                 <LegendItem key={c.categoryId ?? c.categoryName} tone={LEGEND_TONES[i]} label={c.categoryName} value={formatCompactMoney(c.total)} />
               ))}
             </ul>
+            <Link to="/presupuestos" className="type-label-sm text-fg-accent hover:underline">
+              Definir presupuestos
+            </Link>
           </div>
         </section>
       )}
@@ -219,13 +276,12 @@ function Dashboard({
         </div>
       ) : (
         showInsight &&
-        top &&
-        topShare > 0 && (
+        insight && (
           <div className="animate-rise" style={rise(1300, 36)}>
             <InsightCard
               className="animate-halo"
-              message={`Este mes, ${top.categoryName} se lleva el ${topShare}% de tus gastos (${formatMoney(top.total)}). Revisa si hay algo que puedas ajustar.`}
-              primaryAction={{ label: 'Ver movimientos', onClick: () => onNavigate('/movimientos') }}
+              message={insight.message}
+              primaryAction={insight.action}
               secondaryAction={{ label: 'Después', onClick: onDismissInsight }}
             />
           </div>

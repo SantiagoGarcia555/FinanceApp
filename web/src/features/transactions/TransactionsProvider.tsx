@@ -26,6 +26,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   const openNew = useCallback(() => setSheet((s) => ({ open: true, editing: null, key: s.key + 1 })), [])
   const openEdit = useCallback((editing: TransactionResponse) => setSheet((s) => ({ open: true, editing, key: s.key + 1 })), [])
   const close = useCallback(() => setSheet((s) => ({ ...s, open: false })), [])
+  const notifyChanged = useCallback(() => setVersion((v) => v + 1), [])
   const saved = useCallback(() => {
     setVersion((v) => v + 1)
     setSheet((s) => ({ ...s, open: false }))
@@ -38,8 +39,9 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       openNew,
       openEdit,
       version,
+      notifyChanged,
     }),
-    [categories, openNew, openEdit, version],
+    [categories, openNew, openEdit, version, notifyChanged],
   )
 
   return (

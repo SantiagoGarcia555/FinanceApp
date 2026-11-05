@@ -100,7 +100,10 @@ async function readErrorMessage(res: Response): Promise<string> {
     const text = await res.text()
     if (!text) return fallback
     if (res.headers.get('content-type')?.includes('json')) {
-      const body = JSON.parse(text) as { title?: string; detail?: string; errors?: Record<string, string[]> }
+      const parsed: unknown = JSON.parse(text)
+      // Con Accept: application/json, ASP.NET serializa BadRequest("…") como string JSON
+      if (typeof parsed === 'string') return parsed || fallback
+      const body = parsed as { title?: string; detail?: string; errors?: Record<string, string[]> }
       const firstFieldError = body.errors ? Object.values(body.errors).flat()[0] : undefined
       return firstFieldError ?? body.detail ?? body.title ?? fallback
     }
@@ -144,11 +147,13 @@ export function refreshSession(): Promise<AuthResponse | null> {
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   /** Objeto a serializar como JSON. */
   json?: unknown
+  /** multipart/form-data (subida de archivos); el navegador pone el Content-Type con el boundary. */
+  form?: FormData
   /** false para endpoints públicos (login/registro/logout). */
   auth?: boolean
 }
 
-export async function api<T>(path: string, { json, auth = true, headers, ...init }: RequestOptions = {}, retried = false): Promise<T> {
+export async function api<T>(path: string, { json, form, auth = true, headers, ...init }: RequestOptions = {}, retried = false): Promise<T> {
   if (auth && !accessToken && hasStoredSession()) await refreshSession()
 
   const res = await safeFetch(`${API_BASE}${path}`, {
@@ -160,11 +165,11 @@ export async function api<T>(path: string, { json, auth = true, headers, ...init
       ...(path.startsWith('/api/auth/') && AUTH_TRANSPORT_HEADERS),
       ...headers,
     },
-    body: json !== undefined ? JSON.stringify(json) : undefined,
+    body: json !== undefined ? JSON.stringify(json) : form,
   })
 
   if (res.status === 401 && auth) {
-    if (!retried && (await refreshSession())) return api<T>(path, { json, auth, headers, ...init }, true)
+    if (!retried && (await refreshSession())) return api<T>(path, { json, form, auth, headers, ...init }, true)
     clearSession()
     throw new ApiError(401, 'Tu sesión expiró. Vuelve a ingresar.')
   }

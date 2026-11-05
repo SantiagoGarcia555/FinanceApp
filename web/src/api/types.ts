@@ -40,6 +40,64 @@ export interface RegisterRequest {
   preferredCurrency?: string
 }
 
+// ---------- Importador (api/transactions/import/*) ----------
+
+export interface ImportInspectResponse {
+  headers: string[]
+  sampleRows: string[][]
+  suggestedDateColumn: string | null
+  suggestedAmountColumn: string | null
+  suggestedDescriptionColumn: string | null
+}
+
+export interface ImportRowPreview {
+  rowNumber: number
+  date: string | null
+  amount: number | null
+  description: string | null
+  isDuplicate: boolean
+  error: string | null
+}
+
+export interface ImportPreviewResponse {
+  totalRows: number
+  validRows: number
+  errorRows: number
+  duplicateRows: number
+  rows: ImportRowPreview[]
+}
+
+export interface ImportConfirmRow {
+  /** yyyy-MM-dd */
+  date: string
+  amount: number
+  description: string
+  categoryId: string | null
+}
+
+export interface ImportConfirmResponse {
+  importedCount: number
+  transactions: TransactionResponse[]
+}
+
+// ---------- Presupuestos (api/budgets) ----------
+
+export type BudgetPeriod = 'monthly' | 'yearly'
+
+export interface BudgetResponse {
+  id: string
+  categoryId: string
+  categoryName: string
+  icon: string | null
+  limitAmount: number
+  period: BudgetPeriod
+  /** Gastado (positivo) en el mes consultado, o en el año si period = yearly. */
+  spent: number
+  /** Puede ser negativo si se excedió. */
+  remaining: number
+  percentUsed: number
+}
+
 // ---------- Categorías (api/categories) ----------
 
 export interface CategoryResponse {

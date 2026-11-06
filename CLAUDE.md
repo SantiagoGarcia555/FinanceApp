@@ -17,7 +17,9 @@ Repo: https://github.com/SantiagoGarcia555/FinanceApp (monorepo).
 ## Estructura
 ```
 backend/FinanceApp.Api/   Auth/ Controllers/ Data/ Dtos/ Migrations/ Models/ Services/
-web/                      scaffold Vite (solo pantalla placeholder)
+web/                      React 19 + Tailwind v4 (features/, components/ui/, api/, auth/)
+backend/FinanceApp.Api.Tests/  xUnit + EF Core InMemory (147 tests)
+.github/workflows/ci.yml  CI (backend tests + web lint/build)
 mobile/, desktop/         solo README con pasos de inicialización (no inicializados)
 docs/                     ARCHITECTURE.md, EDT (.xlsx), spec MVP, ERD, privacidad, seguridad (.docx)
 contexto-finance-app.md   ficha del proyecto para el portafolio (no es instrucción técnica)
@@ -50,15 +52,17 @@ contexto-finance-app.md   ficha del proyecto para el portafolio (no es instrucci
 ## Estado actual (actualizar al cerrar trabajo relevante)
 - Fase 0 (setup): completa.
 - Fase 1 / backend MVP: completo (1.1.1–1.1.10). Tests (1.1.7): 147 tests, 96.5% de cobertura en Controllers/Services/Auth.
-- CI (1.4.4): `.github/workflows/ci.yml` — en push a main y PRs: backend (restore → build Release → 147 tests con cobertura, artefacto `backend-test-results`) y web (Node 22, `npm ci` → oxlint → build). Pendiente confirmar la primera corrida verde en GitHub. US-02 (bloqueo de login) resuelto 2026-11-05 (migración `AddLoginLockoutAndBudgetIndex`).
+- CI (1.4.4): `.github/workflows/ci.yml` — en push a main y PRs: backend (restore → build Release → 147 tests con cobertura, artefacto `backend-test-results`) y web (Node 22, `npm ci` → oxlint → build). **Completado 2026-11-06**: primera corrida en verde en GitHub Actions (ambos jobs). US-02 (bloqueo de login) resuelto 2026-11-05 (migración `AddLoginLockoutAndBudgetIndex`).
 - Web: importador en `/importar` (asistente subir → columnas → revisar → listo), presupuestos en `/presupuestos` y categorías en `/categorias` (crear/editar/eliminar propias, ocultar/mostrar del sistema; enlazadas desde Perfil). Dashboard (US-12): anillo + alertas de presupuesto, gasto por categoría siempre visible, comparación de gasto total vs mes anterior y tendencia 6 meses (SVG propio). US-04: categoría obligatoria en el registro manual (el importador sí permite "sin categoría"). **La web cubre todas las historias US-01…US-12**; falta mobile.
-- EDT (`docs/Finance_APP_EDT.xlsx`) actualizada 2026-11-05: tareas nuevas 1.1.8–1.1.10, 1.2.7–1.2.8, 1.3.0, 1.4.4. Fase 1 pendiente ≈ 8.8 sem (tests 1.1.7, CI 1.4.4, mobile 1.3.x, QA/deploy 1.4.x). Para editarla con código: `openpyxl` y regenerar fórmulas SUM (insertar filas no las ajusta).
+- EDT (`docs/Finance_APP_EDT.xlsx`) actualizada 2026-11-06: Fase 1 lleva 19 tareas completadas (1.1.x, 1.2.x, 1.4.4); pendientes 1.3.0–1.3.6 (mobile) y 1.4.1–1.4.3 (E2E, deploy, ajustes UX) ≈ 7.75 sem.
+- **Siguiente paso acordado: 1.4.2 deploy temprano de API + web** (comparar Railway/Render/Azure + Postgres gestionado; web y API bajo el mismo dominio raíz por la cookie SameSite=Strict, p. ej. `app.dominio` + `api.dominio` o la API bajo `/api` del mismo host). Después 1.3.0 (tokens/componentes RN) → 1.3.1–1.3.6.
+- Para editar la EDT con código: `openpyxl` y regenerar fórmulas SUM (insertar filas no las ajusta).
 - Gotcha web: con `Accept: application/json`, ASP.NET serializa `BadRequest("…")` como string JSON; `readErrorMessage` en `api/client.ts` lo maneja.
 - Gotcha dev: `dotnet build`/`dotnet ef` fallan por bin bloqueado si la API está corriendo; usar `-c Release`.
 - Web: scaffold + tokens de diseño "Raíz × Aurora" en `web/src/styles/tokens.css` (Tailwind v4 `@theme`, paleta por defecto deshabilitada: usar solo clases del sistema como `bg-canvas`, `text-fg-muted`, `type-h1`). Fuentes Fraunces + DM Sans self-hosted (Fontsource). Componentes de la librería en `web/src/components/ui/` (Button, Chip, IconButton, Avatar, BudgetRing, LegendItem, SectionHeader, TransactionRow, InsightCard, BottomNav; íconos lucide-react). Router (React Router 7) en `App.tsx`: `/ingresar` y `/registro` (públicas), `/` dashboard con **datos reales** de la API, `/perfil` (cerrar sesión), `/fundamentos` catálogo vivo de componentes, resto "próximamente". Animaciones en `styles/motion.css` (respeta prefers-reduced-motion).
 - Movimientos (`features/transactions/`): `/movimientos` con mes, filtros tipo/categoría, agrupado por día y paginación "Cargar más"; crear/editar/eliminar en hoja inferior (`Sheet` sobre `<dialog>`) abierta desde el `+` de la nav en cualquier pantalla. `TransactionsProvider` comparte categorías y un `version` que recarga dashboard y lista al guardar.
 - Web ↔ API: `web/src/api/client.ts` (access token en memoria; refresh rotativo en **cookie HttpOnly** `fa_refresh` — Secure, SameSite=Strict, Path=/api/auth — que la API pone cuando el cliente manda `X-Auth-Transport: cookie`; sin ese header (móvil) el token sigue viajando en el body. En localStorage solo queda la pista `finance-app.has-session`. Refresh *single-flight* ante 401 — necesario por StrictMode y la rotación). El target del proxy se puede cambiar con `API_PROXY_TARGET`. Sesión en `auth/AuthProvider.tsx` + guards `RequireAuth`/`PublicOnly`. El proxy de Vite apunta a **https://localhost:64347** (`secure: false`); no usar el puerto HTTP 64348 porque `UseHttpsRedirection` responde 307 y el navegador sale del proxy. Mientras no existan endpoints de presupuestos ni de insights (fase 2), el dashboard muestra "% de ingresos gastado" + top 3 categorías y un insight calculado (categoría con más gasto), sin datos inventados. Diseño en Figma: ver memoria `project_identidad_visual.md`. Mobile y desktop: sin inicializar.
-- Último commit: 2026-07-27.
+- Último commit: 2026-11-06 (`73f4e8a docs: registrar CI (1.4.4)…`).
 
 ## Roadmap
 0 Setup → 1 MVP Android+Web (manual + import CSV/Excel) → 2 IA ML.NET → 3 Open Banking (Belvo) → 4 iOS + Tauri → 5 monetización y publicación. EDT: ~50 semanas a 25–30 h/semana (estimación, no medición).

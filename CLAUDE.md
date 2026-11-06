@@ -18,7 +18,7 @@ Repo: https://github.com/SantiagoGarcia555/FinanceApp (monorepo).
 ```
 backend/FinanceApp.Api/   Auth/ Controllers/ Data/ Dtos/ Migrations/ Models/ Services/
 web/                      React 19 + Tailwind v4 (features/, components/ui/, api/, auth/)
-backend/FinanceApp.Api.Tests/  xUnit + EF Core InMemory (147 tests)
+backend/FinanceApp.Api.Tests/  xUnit + EF Core InMemory (199 tests)
 .github/workflows/ci.yml  CI (backend tests + web lint/build)
 mobile/, desktop/         solo README con pasos de inicialización (no inicializados)
 docs/                     ARCHITECTURE.md, EDT (.xlsx), spec MVP, ERD, privacidad, seguridad (.docx)
@@ -35,7 +35,7 @@ contexto-finance-app.md   ficha del proyecto para el portafolio (no es instrucci
 
 ## API actual (5 controladores, 24 endpoints, todo bajo JWT salvo auth)
 - `api/auth`: register, login, refresh, logout (refresh tokens persistidos, rotativos y revocables; cookie HttpOnly para web). Login con bloqueo US-02: 5 fallos consecutivos → 429 + `Retry-After` durante 15 min (`Lockout:*` en appsettings), sin verificar contraseña mientras dura.
-- `api/transactions`: CRUD con filtros (fechas, categoría, cuenta, monto, tipo) + paginación; importador `import/inspect` (columnas + muestra + mapeo sugerido), `import/preview` y `import/confirm` (CSV/Excel, errores por fila, duplicados por fecha+monto+descripción normalizada). `ImportValueParser` entiende formatos colombianos: fechas día/mes, montos `38.900` / `$ -1.234.567,89` / `(5.000)`, separador `;`/`,`/tab, UTF-8 o Latin-1.
+- `api/transactions`: CRUD con filtros (fechas, categoría, cuenta, monto, tipo) + paginación; importador `import/inspect` (columnas + muestra + mapeo sugerido), `import/preview` y `import/confirm` (CSV/Excel, errores por fila, duplicados por fecha+monto+descripción normalizada **contando ocurrencias**). `inspect`/`preview` aceptan `?sheet=` (libros con varias hojas) y `preview` `?invertSign=` (TC: cargos en positivo; se aplica en servidor antes de buscar duplicados); `preview` rechaza hojas que declaran moneda ≠ COP ("Moneda: DOLARES"). Extractos reales (1.4.5): `StatementReader` detecta el encabezado aunque no esté en la fila 1, ignora bloques del cliente/encabezados repetidos por página/filas de continuación, salta la sección "Movimientos antes del periodo" de las TC y da año a fechas `d/MM` con el periodo DESDE/HASTA del extracto (o la fecha más reciente ≤ hoy). Validado contra extractos reales de Bancolombia ahorros y Mastercard (las sumas cuadran con el resumen del banco). `ImportValueParser` entiende formatos colombianos: fechas día/mes, montos `38.900` / `$ -1.234.567,89` / `(5.000)`, separador `;`/`,`/tab, UTF-8 o Latin-1.
 - `api/budgets`: CRUD; `GET ?month=yyyy-MM` devuelve spent/remaining/percentUsed (mensual = el mes, anual = el año). Único por usuario+categoría+periodo.
 - `api/categories`: CRUD + `{id}/unhide`. 13 categorías del sistema (`UserId` null, Ids fijos vía `HasData`); "borrar" una del sistema = ocultarla por usuario (`HiddenCategory`).
 - `api/dashboard`: `summary` (mes) y `trend` (hasta 24 meses).
@@ -45,17 +45,19 @@ contexto-finance-app.md   ficha del proyecto para el portafolio (no es instrucci
 - Usuario actual: `MapInboundClaims = false`; leer `sub` con `User.FindFirst("sub")` (no `FindFirstValue`, no `NameIdentifier`).
 - **Toda consulta filtra por el usuario del JWT** y valida que cuenta/categoría le pertenezcan.
 - `Transaction.Date` es columna `date` pura (Npgsql 8 exige `Kind=Utc` en `timestamptz`).
-- Parsers de archivo: patrón estrategia con `ITransactionFileParser` (se resuelve por extensión). Nuevo formato = nueva clase, sin tocar el controlador.
+- Parsers de archivo: patrón estrategia con `ITransactionFileParser.Read` (se resuelve por extensión) que solo devuelve la grilla de celdas (`StatementSheet`); la interpretación común (encabezado, secciones, periodo, moneda, fechas sin año) vive en `StatementReader`. Nuevo formato = nueva clase, sin tocar el controlador.
+- Extractos reales (con datos personales) van en `extractos-prueba/`, que está en `.gitignore`. Los tests usan fixtures sintéticos con la misma estructura (`Tests/Services/StatementFixtures.cs`).
 - Puertos de fases futuras: `ISavingsInsightService` (ML.NET) e `IBankProviderAdapter`. No acoplar el núcleo a proveedores.
 - Commits: Conventional Commits en español con el id de tarea de la EDT, ej. `feat(backend): CRUD de categorías (1.1.3)`. Al cerrar una tarea, commit aparte `docs: marcar tarea X.Y.Z (...) como Completado` actualizando `docs/Finance_APP_EDT.xlsx`.
 
 ## Estado actual (actualizar al cerrar trabajo relevante)
 - Fase 0 (setup): completa.
-- Fase 1 / backend MVP: completo (1.1.1–1.1.10). Tests (1.1.7): 147 tests, 96.5% de cobertura en Controllers/Services/Auth.
-- CI (1.4.4): `.github/workflows/ci.yml` — en push a main y PRs: backend (restore → build Release → 147 tests con cobertura, artefacto `backend-test-results`) y web (Node 22, `npm ci` → oxlint → build). **Completado 2026-11-06**: primera corrida en verde en GitHub Actions (ambos jobs). US-02 (bloqueo de login) resuelto 2026-11-05 (migración `AddLoginLockoutAndBudgetIndex`).
+- Fase 1 / backend MVP: completo (1.1.1–1.1.10). Tests (1.1.7): 147 tests al cerrar 1.1.7 (hoy 199), 96.5% de cobertura en Controllers/Services/Auth.
+- CI (1.4.4): `.github/workflows/ci.yml` — en push a main y PRs: backend (restore → build Release → tests con cobertura, artefacto `backend-test-results`) y web (Node 22, `npm ci` → oxlint → build). **Completado 2026-11-06**: primera corrida en verde en GitHub Actions (ambos jobs). US-02 (bloqueo de login) resuelto 2026-11-05 (migración `AddLoginLockoutAndBudgetIndex`).
 - Web: importador en `/importar` (asistente subir → columnas → revisar → listo), presupuestos en `/presupuestos` y categorías en `/categorias` (crear/editar/eliminar propias, ocultar/mostrar del sistema; enlazadas desde Perfil). Dashboard (US-12): anillo + alertas de presupuesto, gasto por categoría siempre visible, comparación de gasto total vs mes anterior y tendencia 6 meses (SVG propio). US-04: categoría obligatoria en el registro manual (el importador sí permite "sin categoría"). **La web cubre todas las historias US-01…US-12**; falta mobile.
-- EDT (`docs/Finance_APP_EDT.xlsx`) actualizada 2026-11-06: Fase 1 lleva 19 tareas completadas (1.1.x, 1.2.x, 1.4.4); pendientes 1.3.0–1.3.6 (mobile) y 1.4.1–1.4.3 (E2E, deploy, ajustes UX) ≈ 7.75 sem.
-- **Siguiente paso acordado: 1.4.2 deploy temprano de API + web** (comparar Railway/Render/Azure + Postgres gestionado; web y API bajo el mismo dominio raíz por la cookie SameSite=Strict, p. ej. `app.dominio` + `api.dominio` o la API bajo `/api` del mismo host). Después 1.3.0 (tokens/componentes RN) → 1.3.1–1.3.6.
+- EDT (`docs/Finance_APP_EDT.xlsx`) actualizada 2026-11-06: Fase 1 lleva 19 tareas completadas (1.1.x, 1.2.x, 1.4.4); pendientes 1.3.0–1.3.6 (mobile) y 1.4.1–1.4.3 + 1.4.5 (E2E, deploy, ajustes UX, importador de extractos reales) ≈ 8.25 sem.
+- **1.4.5 Importador robusto para extractos reales** (agregada 2026-11-06, va antes del deploy): bloque 1 implementado y probado de punta a punta con los Excel reales (encabezado desplazado/repetido, fechas sin año, hoja/moneda, signo TC, duplicados por conteo; +52 tests). Pendiente: commit y marcar Completado en la EDT. Queda para Fase 2: transferencias internas/pago de TC (evitar doble conteo; requiere tipo `Transfer` + migración), perfiles por banco (mapeo automático), USD con conversión, cuotas/diferidos y PDF con PdfPig (los PDF de Bancolombia traen texto, pero la extracción simple desordena columnas; hace falta leer por coordenadas).
+- **Siguiente paso acordado: cerrar 1.4.5 (commit) y luego 1.4.2 deploy temprano de API + web** (comparar Railway/Render/Azure + Postgres gestionado; web y API bajo el mismo dominio raíz por la cookie SameSite=Strict, p. ej. `app.dominio` + `api.dominio` o la API bajo `/api` del mismo host). Después 1.3.0 (tokens/componentes RN) → 1.3.1–1.3.6.
 - Para editar la EDT con código: `openpyxl` y regenerar fórmulas SUM (insertar filas no las ajusta).
 - Gotcha web: con `Accept: application/json`, ASP.NET serializa `BadRequest("…")` como string JSON; `readErrorMessage` en `api/client.ts` lo maneja.
 - Gotcha dev: `dotnet build`/`dotnet ef` fallan por bin bloqueado si la API está corriendo; usar `-c Release`.

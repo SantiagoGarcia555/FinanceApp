@@ -1,5 +1,7 @@
 # Finance APP
 
+[![CI](https://github.com/SantiagoGarcia555/FinanceApp/actions/workflows/ci.yml/badge.svg)](https://github.com/SantiagoGarcia555/FinanceApp/actions/workflows/ci.yml)
+
 App multiplataforma de finanzas personales: registro de gastos, consejos y
 oportunidades de ahorro, y predicciones de gasto, con planes de integrar
 Open Banking y billeteras virtuales más adelante.

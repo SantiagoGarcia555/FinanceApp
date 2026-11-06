@@ -1,0 +1,80 @@
+# CI — tarea 1.4.4 de la EDT.
+# En cada push a main y en cada PR: compila y prueba el backend (.NET 8) y valida la web (lint + build).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Un push nuevo cancela la corrida anterior de la misma rama (ahorra minutos de Actions)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (.NET 8 · tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend/FinanceApp.Api.Tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+          cache: true
+          cache-dependency-path: backend/**/*.csproj
+
+      - name: Restaurar dependencias
+        run: dotnet restore
+
+      - name: Compilar (API + tests)
+        run: dotnet build -c Release --no-restore
+
+      - name: Tests unitarios con cobertura
+        run: >
+          dotnet test -c Release --no-build
+          --logger "trx;LogFileName=resultados.trx"
+          --collect:"XPlat Code Coverage"
+          --results-directory ../test-results
+
+      - name: Subir resultados y cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/test-results
+          retention-days: 14
+
+  web:
+    name: Web (lint · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # Vite 8 exige Node >= 22.12
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Type-check + build (tsc + Vite)
+        run: npm run build

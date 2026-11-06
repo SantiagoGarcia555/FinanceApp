@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowUpRight, Bell, Briefcase, Plus, Sprout, Utensils } from 'lucide-react-native'
+import { ArrowLeft, ArrowUpRight, Bell, Briefcase, Plus, Sprout, Utensils } from 'lucide-react-native'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -67,7 +67,7 @@ function Block({ title, children, delay }: { title: string; children: ReactNode;
   )
 }
 
-export function FundamentosScreen() {
+export function FundamentosScreen({ onBack }: { onBack?: () => void }) {
   const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<NavTabKey>('inicio')
   const [kind, setKind] = useState<Kind>('expense')
@@ -81,6 +81,7 @@ export function FundamentosScreen() {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + space[6], paddingBottom: BOTTOM_NAV_CLEARANCE + insets.bottom + space[6] }]}
       >
         <Rise style={styles.header}>
+          {onBack && <IconButton icon={ArrowLeft} label="Volver" onPress={onBack} style={styles.back} />}
           <Text style={[type.caption, { color: colors.fgMuted }]}>Finance APP · Fundamentos y componentes</Text>
           <Text style={[type.h1, { color: colors.fg }]}>Raíz × Aurora</Text>
           <Text style={styles.brand}>raíz</Text>
@@ -225,6 +226,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: space[5], gap: space[8] },
   header: { gap: space[1] },
+  back: { marginBottom: space[3] },
   brand: { fontFamily: fonts.displayBoldItalic, fontSize: 36, lineHeight: 40, color: colors.fgBrand, marginTop: space[2] },
   block: { gap: space[3] },
   swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] },

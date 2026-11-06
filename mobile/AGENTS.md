@@ -1,8 +1,8 @@
 This is an Expo/React Native mobile application (Finance APP, see ../CLAUDE.md and README.md).
 
 Project specifics: lint is `npm run lint` (oxlint, not `expo lint`); typecheck is `npm run typecheck`;
-`npm test` checks token parity with ../web. Style only with tokens from `src/theme` (no raw hex),
-and reuse `src/components/ui`. Expo Router is not set up yet (arrives in task 1.3.1).
+`npm test` checks token parity with ../web and the API client. Style only with tokens from `src/theme` (no raw hex),
+and reuse `src/components/ui`. Routes live in `src/app/` (Expo Router); shared web/mobile TS lives in `../shared` (no package imports there).
 
 Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 

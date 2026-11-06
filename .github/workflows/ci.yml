@@ -1,5 +1,6 @@
 # CI — tarea 1.4.4 de la EDT.
-# En cada push a main y en cada PR: compila y prueba el backend (.NET 8) y valida la web (lint + build).
+# En cada push a main y en cada PR: compila y prueba el backend (.NET 8), valida la web (lint + build)
+# y la app móvil (tipos, lint, paridad de tokens con la web y bundle Android).
 name: CI
 
 on:
@@ -78,3 +79,35 @@ jobs:
 
       - name: Type-check + build (tsc + Vite)
         run: npm run build
+
+  mobile:
+    name: Mobile (tipos · lint · paridad · bundle Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # >= 22.18: el runner de Node ejecuta los tests .mts sin compilar
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Type-check (app + tests)
+        run: npm run typecheck
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Paridad de tokens y format.ts con la web
+        run: npm test
+
+      # Atrapa errores que solo aparecen al empaquetar con Metro/Hermes (imports rotos, assets)
+      - name: Bundle Android (expo export)
+        run: npx expo export --platform android --output-dir ../mobile-dist

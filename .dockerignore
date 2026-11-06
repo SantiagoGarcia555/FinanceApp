@@ -1,0 +1,20 @@
+# Solo entra al contexto lo que el Dockerfile necesita (web/ y backend/FinanceApp.Api/).
+**/bin/
+**/obj/
+**/node_modules/
+web/dist/
+backend/FinanceApp.Api.Tests/
+backend/test-results/
+**/appsettings.Development.json
+**/*.user
+.git/
+.github/
+.vscode/
+.idea/
+.claude/
+docs/
+mobile/
+desktop/
+extractos-prueba/
+*.md
+.env*

@@ -1,0 +1,24 @@
+# Blueprint de Render (1.4.2). En Render: New → Blueprint → elegir este repo.
+# Un solo servicio Docker sirve API + web (ver Dockerfile). La base es Neon (free), no Render Postgres:
+# la free de Render caduca a los 30 días.
+services:
+  - type: web
+    name: finance-app
+    runtime: docker
+    plan: free            # se duerme tras 15 min sin tráfico; subir a "starter" ($7/mes) para quitar el arranque en frío
+    region: virginia      # misma región AWS que Neon (us-east-1) para bajar la latencia API ↔ BD
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass   # despliega en push a main solo si el CI de GitHub pasa
+    envVars:
+      # Cadena de Neon tal cual (postgresql://…?sslmode=require); la API la convierte a formato Npgsql.
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      # Clave de firma JWT generada por Render (nunca pasa por el repo ni por el chat).
+      - key: Jwt__SecretKey
+        generateValue: true
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Database__MigrateOnStartup
+        value: "true"

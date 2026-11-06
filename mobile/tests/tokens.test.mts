@@ -64,9 +64,3 @@ test('withAlpha convierte hex a rgba', () => {
   assert.equal(withAlpha('#2a211b', 0.8), 'rgba(42, 33, 27, 0.8)')
   assert.equal(withAlpha('#ffffff', 1), 'rgba(255, 255, 255, 1)')
 })
-
-test('format.ts es idéntico al de la web (mismo formato COP en ambas apps)', () => {
-  const web = readFileSync(new URL('web/src/lib/format.ts', root), 'utf8')
-  const mobile = readFileSync(new URL('mobile/src/lib/format.ts', root), 'utf8')
-  assert.equal(mobile.replace(/\r\n/g, '\n'), web.replace(/\r\n/g, '\n'), 'copia web/src/lib/format.ts a mobile/src/lib/format.ts')
-})

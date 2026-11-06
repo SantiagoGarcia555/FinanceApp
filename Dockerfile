@@ -10,6 +10,8 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+# Código común con la app móvil (web/src/lib/format.ts y api/types.ts lo reexportan)
+COPY shared/ /src/shared/
 RUN npm run build
 
 # ---------- 2) API: dotnet publish ----------

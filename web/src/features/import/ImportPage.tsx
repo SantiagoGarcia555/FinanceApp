@@ -6,7 +6,7 @@ import { confirmImport, inspectImport, previewImport } from '../../api/import'
 import type { CategoryResponse, ImportInspectResponse, ImportPreviewResponse, ImportRowPreview } from '../../api/types'
 import { Button, Chip, SelectField } from '../../components/ui'
 import { cn } from '../../lib/cn'
-import { formatMoney, formatRelativeDay } from '../../lib/format'
+import { formatMoney, formatRelativeDay, formatShortDate } from '../../lib/format'
 import { FormError } from '../auth/AuthLayout'
 import { useTransactions } from '../transactions/TransactionsContext'
 
@@ -17,7 +17,7 @@ type Mapping = { date: string; amount: string; description: string }
 type Step =
   | { kind: 'upload' }
   | { kind: 'map'; file: File; inspect: ImportInspectResponse }
-  | { kind: 'review'; file: File; preview: ImportPreviewResponse; mapping: Mapping; categoryId: string; invert: boolean }
+  | { kind: 'review'; file: File; preview: ImportPreviewResponse; categoryId: string }
   | { kind: 'done'; count: number }
 
 const STEP_INFO = {
@@ -51,12 +51,26 @@ export function ImportPage() {
     }
   }
 
-  async function onMapped(file: File, mapping: Mapping, categoryId: string, invert: boolean) {
+  /** Libros con varias hojas (p. ej. tarjeta: PESOS / DOLARES): vuelve a inspeccionar la hoja elegida. */
+  async function onSheet(file: File, sheet: string) {
     setError(null)
     setBusy(true)
     try {
-      const preview = await previewImport(file, mapping)
-      setStep({ kind: 'review', file, preview, mapping, categoryId, invert })
+      setStep({ kind: 'map', file, inspect: await inspectImport(file, sheet) })
+    } catch (e) {
+      setError(errorMessage(e, 'No pudimos leer esa hoja.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onMapped(file: File, sheet: string | null, mapping: Mapping, categoryId: string, invert: boolean) {
+    setError(null)
+    setBusy(true)
+    try {
+      // El signo lo invierte la API, así la detección de duplicados compara contra los montos ya corregidos.
+      const preview = await previewImport(file, mapping, { sheet, invertSign: invert })
+      setStep({ kind: 'review', file, preview, categoryId })
     } catch (e) {
       setError(errorMessage(e, 'No pudimos interpretar el archivo con esas columnas.'))
     } finally {
@@ -64,14 +78,14 @@ export function ImportPage() {
     }
   }
 
-  async function onConfirm(rows: ImportRowPreview[], categoryId: string, invert: boolean) {
+  async function onConfirm(rows: ImportRowPreview[], categoryId: string) {
     setError(null)
     setBusy(true)
     try {
       const result = await confirmImport(
         rows.map((r) => ({
           date: r.date!.slice(0, 10),
-          amount: invert ? -r.amount! : r.amount!,
+          amount: r.amount!,
           description: r.description!,
           categoryId: categoryId || null,
         })),
@@ -104,21 +118,23 @@ export function ImportPage() {
       {step.kind === 'upload' && <UploadStep busy={busy} onFile={onFile} />}
       {step.kind === 'map' && (
         <MapStep
+          // Al cambiar de hoja cambian columnas y sugerencias: se monta de nuevo con el estado inicial.
+          key={step.inspect.sheet ?? ''}
           file={step.file}
           inspect={step.inspect}
           categories={categories}
           busy={busy}
           onBack={restart}
-          onNext={(mapping, categoryId, invert) => onMapped(step.file, mapping, categoryId, invert)}
+          onSheet={(sheet) => onSheet(step.file, sheet)}
+          onNext={(mapping, categoryId, invert) => onMapped(step.file, step.inspect.sheet, mapping, categoryId, invert)}
         />
       )}
       {step.kind === 'review' && (
         <ReviewStep
           preview={step.preview}
-          invert={step.invert}
           busy={busy}
           onBack={() => setStep({ kind: 'upload' })}
-          onConfirm={(rows) => onConfirm(rows, step.categoryId, step.invert)}
+          onConfirm={(rows) => onConfirm(rows, step.categoryId)}
         />
       )}
       {step.kind === 'done' && (
@@ -200,8 +216,9 @@ function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: File) => v
         <h2 className="type-label">¿Dónde lo descargo?</h2>
         <p className="type-body-sm text-fg-muted">
           En la banca en línea de tu banco busca <span className="text-fg">Movimientos</span> o <span className="text-fg">Extractos</span> y
-          elige exportar en CSV o Excel. Revisamos fechas día/mes y montos como “$ -38.900”, y marcamos los movimientos que ya tienes para no
-          duplicarlos.
+          elige exportar en CSV o Excel. El extracto tal cual lo entrega el banco sirve: encontramos la tabla de movimientos aunque tenga
+          datos tuyos arriba, entendemos fechas día/mes (incluso sin año) y montos como “$ -38.900”, y marcamos los movimientos que ya tienes
+          para no duplicarlos.
         </p>
       </section>
     </>
@@ -216,6 +233,7 @@ function MapStep({
   categories,
   busy,
   onBack,
+  onSheet,
   onNext,
 }: {
   file: File
@@ -223,6 +241,7 @@ function MapStep({
   categories: CategoryResponse[]
   busy: boolean
   onBack: () => void
+  onSheet: (sheet: string) => void
   onNext: (mapping: Mapping, categoryId: string, invert: boolean) => void
 }) {
   const [mapping, setMapping] = useState<Mapping>({
@@ -231,8 +250,10 @@ function MapStep({
     description: inspect.suggestedDescriptionColumn ?? '',
   })
   const [categoryId, setCategoryId] = useState('')
-  const [invert, setInvert] = useState(false)
+  const [invert, setInvert] = useState(inspect.suggestInvertSign)
   const [error, setError] = useState<string | null>(null)
+  // La API rechaza otras monedas: el dashboard suma todo como pesos.
+  const foreignCurrency = inspect.detectedCurrency && inspect.detectedCurrency !== 'COP' ? inspect.detectedCurrency : null
 
   const roleOf = (header: string) =>
     header === mapping.date ? 'Fecha' : header === mapping.amount ? 'Monto' : header === mapping.description ? 'Descripción' : null
@@ -260,7 +281,39 @@ function MapStep({
     <>
       <p className="type-body-sm text-fg-muted">
         Archivo: <span className="type-label text-fg">{file.name}</span>. Ya elegimos las columnas que reconocimos; revisa que estén bien.
+        {inspect.periodStart && inspect.periodEnd && (
+          <>
+            {' '}
+            Periodo del extracto: <span className="text-fg">{formatShortDate(inspect.periodStart)}</span> a{' '}
+            <span className="text-fg">{formatShortDate(inspect.periodEnd)}</span>.
+          </>
+        )}
       </p>
+
+      {inspect.sheets.length > 1 && (
+        <SelectField
+          label="Hoja del archivo"
+          value={inspect.sheet ?? ''}
+          disabled={busy}
+          onChange={(e) => onSheet(e.target.value)}
+        >
+          {inspect.sheets.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </SelectField>
+      )}
+
+      {foreignCurrency && (
+        <p role="alert" className="type-body-sm flex items-start gap-2 rounded-md bg-surface p-4 shadow-card">
+          <AlertTriangle aria-hidden size={18} className="mt-0.5 shrink-0 text-fg-accent" />
+          <span>
+            Esta hoja está en <span className="type-label">{foreignCurrency}</span>. Por ahora solo importamos movimientos en pesos (COP)
+            {inspect.sheets.length > 1 ? ': elige la hoja en pesos.' : '.'}
+          </span>
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-lg bg-surface shadow-card">
         <table className="type-body-sm w-full text-left">
@@ -311,14 +364,18 @@ function MapStep({
         <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} className="mt-1 size-4 accent-[var(--color-bg-brand)]" />
         <span className="flex flex-col">
           <span className="type-label">Invertir signos</span>
-          <span className="type-body-sm text-fg-muted">Márcalo si tu banco muestra los gastos en positivo y los abonos en negativo.</span>
+          <span className="type-body-sm text-fg-muted">
+            {inspect.suggestInvertSign
+              ? 'Lo marcamos porque parece un extracto de tarjeta de crédito: ahí las compras vienen en positivo y los pagos en negativo.'
+              : 'Márcalo si tu banco muestra los gastos en positivo y los abonos en negativo.'}
+          </span>
         </span>
       </label>
 
       <FormError message={error} />
 
       <div className="flex flex-col gap-2">
-        <Button onClick={next} disabled={busy}>
+        <Button onClick={next} disabled={busy || Boolean(foreignCurrency)}>
           {busy ? 'Revisando…' : 'Revisar movimientos'}
         </Button>
         <Button variant="secondary" onClick={onBack} disabled={busy}>
@@ -333,13 +390,11 @@ function MapStep({
 
 function ReviewStep({
   preview,
-  invert,
   busy,
   onBack,
   onConfirm,
 }: {
   preview: ImportPreviewResponse
-  invert: boolean
   busy: boolean
   onBack: () => void
   onConfirm: (rows: ImportRowPreview[]) => void
@@ -379,6 +434,23 @@ function ReviewStep({
         <p className="type-body-sm text-fg-muted">Dejamos sin marcar los movimientos que parecen repetidos (misma fecha, monto y descripción). Márcalos si sí quieres importarlos.</p>
       )}
 
+      {preview.yearInferredRows > 0 && (
+        <p className="type-body-sm text-fg-muted">
+          {preview.yearInferredRows === preview.totalRows ? 'Las fechas' : `${preview.yearInferredRows} fechas`} del extracto no traen año.{' '}
+          {preview.periodStart && preview.periodEnd
+            ? `Lo tomamos del periodo del extracto (${formatShortDate(preview.periodStart)} a ${formatShortDate(preview.periodEnd)}).`
+            : 'Asumimos el año más reciente sin pasar de hoy.'}{' '}
+          Revisa que esté bien antes de importar.
+        </p>
+      )}
+
+      {preview.ignoredRows > 0 && (
+        <p className="type-body-sm text-fg-muted">
+          Saltamos {preview.ignoredRows} {preview.ignoredRows === 1 ? 'fila que no es un movimiento' : 'filas que no son movimientos'} (datos del
+          cliente, resúmenes o encabezados repetidos en cada página).
+        </p>
+      )}
+
       {importable.length > 0 && (
         <label className="flex items-center gap-3 px-1">
           <input
@@ -393,7 +465,7 @@ function ReviewStep({
 
       <ul className="rounded-lg bg-surface px-4 py-1.5 shadow-card">
         {preview.rows.map((r) => {
-          const amount = r.amount != null ? (invert ? -r.amount : r.amount) : null
+          const amount = r.amount
           const disabled = Boolean(r.error)
           return (
             <li key={r.rowNumber} className="border-b border-line/60 last:border-0">
@@ -414,7 +486,7 @@ function ReviewStep({
                     </span>
                   ) : (
                     <span className="type-body-sm text-fg-muted">
-                      {r.date ? formatRelativeDay(r.date) : ''}
+                      {r.date ? (r.yearInferred ? formatShortDate(r.date) : formatRelativeDay(r.date)) : ''}
                       {r.isDuplicate && <span className="text-fg-accent"> · ya registrado</span>}
                     </span>
                   )}

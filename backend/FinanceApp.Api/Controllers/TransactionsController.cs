@@ -186,9 +186,13 @@ public class TransactionsController(AppDbContext db, IEnumerable<ITransactionFil
     /// Primer paso del importador: devuelve columnas, primeras filas y el mapeo sugerido,
     /// para que el usuario confirme qué columna es fecha, monto y descripción. No guarda nada.
     /// </summary>
+    /// <remarks>
+    /// El encabezado no tiene que estar en la primera fila (los extractos traen datos del cliente arriba).
+    /// En libros con varias hojas se lee <paramref name="sheet"/> (o la primera) y se devuelven todas para elegir.
+    /// </remarks>
     [HttpPost("import/inspect")]
     [RequestSizeLimit(10_000_000)]
-    public ActionResult<ImportInspectResponse> InspectImport(IFormFile file)
+    public ActionResult<ImportInspectResponse> InspectImport(IFormFile file, [FromQuery] string? sheet = null)
     {
         if (file is null || file.Length == 0)
             return BadRequest("Sube un archivo .csv o .xlsx.");
@@ -197,27 +201,36 @@ public class TransactionsController(AppDbContext db, IEnumerable<ITransactionFil
         if (parser is null)
             return BadRequest("Formato no soportado. Sube un archivo .csv o .xlsx.");
 
-        ImportFileSample sample;
+        StatementSheet statement;
+        StatementLayout? layout;
         try
         {
             using var stream = file.OpenReadStream();
-            sample = parser.Sample(stream, maxRows: 5);
+            statement = parser.Read(stream, sheet);
+            layout = StatementReader.Analyze(statement);
         }
         catch (Exception ex)
         {
             return BadRequest($"No se pudo leer el archivo: {ex.Message}");
         }
 
-        if (sample.Headers.Count == 0)
+        if (layout is null)
             return BadRequest("El archivo está vacío o no tiene fila de encabezados.");
 
+        var sample = StatementReader.Sample(statement, layout, maxRows: 5);
         var suggestion = ImportValueParser.SuggestColumns(sample.Headers);
         return new ImportInspectResponse(
             sample.Headers,
             sample.Rows,
             suggestion.DateColumn,
             suggestion.AmountColumn,
-            suggestion.DescriptionColumn);
+            suggestion.DescriptionColumn,
+            statement.SheetNames,
+            statement.SheetName,
+            layout.Currency,
+            layout.LooksLikeCreditCard,
+            layout.Period?.Start,
+            layout.Period?.End);
     }
 
     /// <summary>
@@ -225,13 +238,16 @@ public class TransactionsController(AppDbContext db, IEnumerable<ITransactionFil
     /// previsualización, marcando filas con error y posibles duplicados (fecha+monto+descripción
     /// exactos contra transacciones ya existentes). No guarda nada en la BD (US-10/US-11).
     /// </summary>
+    /// <param name="invertSign">Tarjetas de crédito: el cargo viene positivo. Se aplica antes de buscar duplicados.</param>
     [HttpPost("import/preview")]
     [RequestSizeLimit(10_000_000)]
     public async Task<ActionResult<ImportPreviewResponse>> PreviewImport(
         IFormFile file,
         [FromQuery] string dateColumn,
         [FromQuery] string amountColumn,
-        [FromQuery] string descriptionColumn)
+        [FromQuery] string descriptionColumn,
+        [FromQuery] string? sheet = null,
+        [FromQuery] bool invertSign = false)
     {
         if (file is null || file.Length == 0)
             return BadRequest("Subí un archivo .csv o .xlsx.");
@@ -243,40 +259,90 @@ public class TransactionsController(AppDbContext db, IEnumerable<ITransactionFil
         if (parser is null)
             return BadRequest("Formato no soportado. Subí un archivo .csv o .xlsx.");
 
-        List<ParsedImportRow> parsedRows;
+        StatementLayout layout;
+        ParsedStatement parsed;
         try
         {
             await using var stream = file.OpenReadStream();
-            parsedRows = parser.Parse(stream, dateColumn, amountColumn, descriptionColumn).ToList();
+            var statement = parser.Read(stream, sheet);
+            layout = StatementReader.Analyze(statement)
+                ?? throw new InvalidOperationException("El archivo está vacío o no tiene fila de encabezados.");
+            parsed = StatementReader.Parse(
+                statement,
+                layout,
+                new ImportColumnMapping(dateColumn, amountColumn, descriptionColumn),
+                referenceDate: DateTime.UtcNow.Date);
         }
         catch (Exception ex)
         {
             return BadRequest($"No se pudo leer el archivo: {ex.Message}");
         }
 
-        var existingSet = (await db.Transactions
-            .Where(t => t.UserId == CurrentUserId)
-            .Select(t => new { t.Date, t.Amount, t.Description })
-            .ToListAsync())
-            .Select(t => (t.Date.Date, t.Amount, Description: t.Description.Trim().ToLowerInvariant()))
-            .ToHashSet();
+        // Transaction.Currency existe pero el dashboard suma todo como COP: mezclar USD lo falsearía.
+        if (layout.Currency is not null && layout.Currency != "COP")
+            return BadRequest($"Esta hoja está en {layout.Currency}. Por ahora solo importamos movimientos en pesos (COP): elige la hoja en pesos.");
 
-        var previews = parsedRows.Select(r =>
-        {
-            var isDuplicate = r.Error is null
-                && r.Date is not null
-                && r.Amount is not null
-                && existingSet.Contains((r.Date.Value.Date, r.Amount.Value, (r.Description ?? string.Empty).Trim().ToLowerInvariant()));
+        var parsedRows = invertSign
+            ? parsed.Rows.Select(r => r with { Amount = -r.Amount }).ToList()
+            : parsed.Rows;
 
-            return new ImportRowPreview(r.RowNumber, r.Date, r.Amount, r.Description, isDuplicate, r.Error);
-        }).ToList();
+        var previews = await MarkDuplicatesAsync(parsedRows);
 
         return new ImportPreviewResponse(
             TotalRows: previews.Count,
             ValidRows: previews.Count(p => p.Error is null),
             ErrorRows: previews.Count(p => p.Error is not null),
             DuplicateRows: previews.Count(p => p.IsDuplicate),
-            Rows: previews);
+            Rows: previews,
+            IgnoredRows: parsed.IgnoredRows,
+            YearInferredRows: previews.Count(p => p.YearInferred),
+            PeriodStart: layout.Period?.Start,
+            PeriodEnd: layout.Period?.End);
+    }
+
+    /// <summary>
+    /// Marca como duplicada cada fila que coincide (fecha + monto + descripción normalizada) con una transacción
+    /// existente del usuario. Cuenta ocurrencias: si ya hay 1 registrada y el archivo trae 2 iguales (dos
+    /// transferencias de 70.000 el mismo día), solo una se marca.
+    /// </summary>
+    private async Task<List<ImportRowPreview>> MarkDuplicatesAsync(IReadOnlyList<ParsedImportRow> rows)
+    {
+        static (DateTime, decimal, string) Key(DateTime date, decimal amount, string? description) =>
+            (date.Date, amount, (description ?? string.Empty).Trim().ToLowerInvariant());
+
+        var dates = rows.Where(r => r.Date is not null).Select(r => r.Date!.Value.Date).ToList();
+        var remaining = new Dictionary<(DateTime, decimal, string), int>();
+
+        if (dates.Count > 0)
+        {
+            var (from, to) = (dates.Min(), dates.Max());
+            var existing = await db.Transactions
+                .Where(t => t.UserId == CurrentUserId && t.Date >= from && t.Date <= to)
+                .Select(t => new { t.Date, t.Amount, t.Description })
+                .ToListAsync();
+
+            foreach (var group in existing.GroupBy(t => Key(t.Date, t.Amount, t.Description)))
+                remaining[group.Key] = group.Count();
+        }
+
+        var previews = new List<ImportRowPreview>(rows.Count);
+        foreach (var r in rows)
+        {
+            var isDuplicate = false;
+            if (r.Error is null && r.Date is not null && r.Amount is not null)
+            {
+                var key = Key(r.Date.Value, r.Amount.Value, r.Description);
+                if (remaining.TryGetValue(key, out var count) && count > 0)
+                {
+                    remaining[key] = count - 1;
+                    isDuplicate = true;
+                }
+            }
+
+            previews.Add(new ImportRowPreview(r.RowNumber, r.Date, r.Amount, r.Description, isDuplicate, r.Error, r.YearInferred));
+        }
+
+        return previews;
     }
 
     /// <summary>

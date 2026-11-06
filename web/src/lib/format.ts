@@ -56,6 +56,14 @@ export function formatRelativeDay(iso: string, now = new Date()): string {
   return `${day} ${monthShort}`
 }
 
+/** "1 jul 2026" (con año: para verificar fechas importadas cuyo año se dedujo). */
+export function formatShortDate(iso: string): string {
+  const parts = dayMonth.formatToParts(parseDateOnly(iso))
+  const day = parts.find((p) => p.type === 'day')?.value ?? ''
+  const monthShort = (parts.find((p) => p.type === 'month')?.value ?? '').replace('.', '')
+  return `${day} ${monthShort} ${iso.slice(0, 4)}`
+}
+
 const longDate = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })
 
 /** "Miércoles, 5 nov" */

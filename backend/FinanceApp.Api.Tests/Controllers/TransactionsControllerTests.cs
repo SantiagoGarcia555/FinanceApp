@@ -3,6 +3,8 @@ using FinanceApp.Api.Data;
 using FinanceApp.Api.Dtos;
 using FinanceApp.Api.Models;
 using FinanceApp.Api.Services;
+using FinanceApp.Api.Tests.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -199,6 +201,100 @@ public class TransactionsControllerTests
     {
         var result = await Controller().PreviewImport(TestSupport.CsvFile(Csv), "Fecha", "Monto", "Descripción");
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    // ---------- Importador con extractos reales (1.4.5) ----------
+
+    private static IFormFile Xlsx(MemoryStream stream, string fileName = "extracto.xlsx") =>
+        TestSupport.FormFile(fileName, stream.ToArray());
+
+    [Fact]
+    public void Inspect_ExtractoTarjeta_DevuelveHojasMonedaYSugiereInvertirSigno()
+    {
+        var inspect = Controller().InspectImport(Xlsx(StatementFixtures.CreditCard())).Value!;
+
+        Assert.Equal(["PESOS", "DOLARES"], inspect.Sheets);
+        Assert.Equal("PESOS", inspect.Sheet);
+        Assert.Equal("COP", inspect.DetectedCurrency);
+        Assert.True(inspect.SuggestInvertSign);
+        Assert.Equal("Movimientos", inspect.SuggestedDescriptionColumn);
+        Assert.Equal("INTERESES CORRIENTES", inspect.SampleRows[0][2]);
+
+        var dolares = Controller().InspectImport(Xlsx(StatementFixtures.CreditCard()), sheet: "DOLARES").Value!;
+        Assert.Equal("USD", dolares.DetectedCurrency);
+    }
+
+    [Fact]
+    public void Inspect_ExtractoAhorros_EncabezadoDesplazadoYPeriodo()
+    {
+        var inspect = Controller().InspectImport(Xlsx(StatementFixtures.SavingsAccount())).Value!;
+
+        Assert.Equal("FECHA", inspect.SuggestedDateColumn);
+        Assert.Equal("VALOR", inspect.SuggestedAmountColumn);
+        Assert.False(inspect.SuggestInvertSign);
+        Assert.Equal(new DateTime(2026, 6, 30), inspect.PeriodStart);
+        Assert.Equal(new DateTime(2026, 9, 30), inspect.PeriodEnd);
+        Assert.Equal("1/07", inspect.SampleRows[0][0]);
+    }
+
+    [Fact]
+    public async Task ImportEndpoints_HojaInexistenteDevuelve400()
+    {
+        Assert.IsType<BadRequestObjectResult>(Controller().InspectImport(Xlsx(StatementFixtures.CreditCard()), sheet: "EUROS").Result);
+        var preview = await Controller().PreviewImport(Xlsx(StatementFixtures.CreditCard()), "Fecha", "Valor Movimiento", "Movimientos", sheet: "EUROS");
+        Assert.IsType<BadRequestObjectResult>(preview.Result);
+    }
+
+    [Fact]
+    public async Task Preview_HojaEnDolaresDevuelve400()
+    {
+        var result = await Controller().PreviewImport(Xlsx(StatementFixtures.CreditCard()), "Fecha", "Valor Movimiento", "Movimientos", sheet: "DOLARES");
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("USD", bad.Value!.ToString());
+    }
+
+    [Fact]
+    public async Task Preview_ExtractoAhorros_ReportaIgnoradasYAnioDeducido()
+    {
+        var preview = (await Controller().PreviewImport(Xlsx(StatementFixtures.SavingsAccount()), "FECHA", "VALOR", "DESCRIPCIÓN")).Value!;
+
+        Assert.Equal(6, preview.ValidRows);
+        Assert.Equal(0, preview.ErrorRows);
+        Assert.Equal(9, preview.IgnoredRows);
+        Assert.Equal(6, preview.YearInferredRows);
+        Assert.Equal(new DateTime(2026, 6, 30), preview.PeriodStart);
+        Assert.All(preview.Rows, r => Assert.True(r.YearInferred));
+    }
+
+    [Fact]
+    public async Task Preview_InvertirSigno_SeAplicaAntesDeBuscarDuplicados()
+    {
+        // Ya registrada como gasto (negativo); en el extracto de la tarjeta viene positiva.
+        TestSupport.AddTransaction(_db, _user, _account, -5_840, new DateTime(2026, 10, 14), "Didi");
+
+        var preview = (await Controller().PreviewImport(Xlsx(StatementFixtures.CreditCard()), "Fecha", "Valor Movimiento", "Movimientos", invertSign: true)).Value!;
+
+        var didi = preview.Rows.Single(r => r.Description == "Didi");
+        Assert.Equal(-5_840m, didi.Amount);
+        Assert.True(didi.IsDuplicate);
+        Assert.Equal(-92_214.12m, preview.Rows.Single(r => r.Description == "INTERESES CORRIENTES").Amount);
+        Assert.Equal(453_766m, preview.Rows.Single(r => r.Description == "ABONO SUCURSAL VIRTUAL").Amount);
+        Assert.Equal(1, preview.DuplicateRows);
+    }
+
+    [Fact]
+    public async Task Preview_DuplicadosCuentanOcurrencias()
+    {
+        // El extracto trae DOS transferencias idénticas el 1/09; solo una ya está registrada.
+        TestSupport.AddTransaction(_db, _user, _account, -70_000, new DateTime(2026, 9, 1), "transferencia cta suc virtual");
+
+        var preview = (await Controller().PreviewImport(Xlsx(StatementFixtures.SavingsAccount()), "FECHA", "VALOR", "DESCRIPCIÓN")).Value!;
+
+        var twins = preview.Rows.Where(r => r.Description == "TRANSFERENCIA CTA SUC VIRTUAL").ToList();
+        Assert.Equal(2, twins.Count);
+        Assert.Equal(1, twins.Count(r => r.IsDuplicate));
+        Assert.Equal(1, preview.DuplicateRows);
     }
 
     [Fact]

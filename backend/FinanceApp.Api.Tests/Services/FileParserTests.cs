@@ -4,6 +4,29 @@ using FinanceApp.Api.Services;
 
 namespace FinanceApp.Api.Tests.Services;
 
+/// <summary>Atajos de prueba: leer + analizar + interpretar, como hace el controlador.</summary>
+internal static class ParserTestExtensions
+{
+    public static readonly DateTime Today = new(2026, 11, 6);
+
+    public static IReadOnlyList<ParsedImportRow> Parse(this ITransactionFileParser parser, Stream stream, string date, string amount, string description) =>
+        ParseStatement(parser, stream, date, amount, description).Rows;
+
+    public static ParsedStatement ParseStatement(this ITransactionFileParser parser, Stream stream, string date, string amount, string description, string? sheet = null)
+    {
+        var statement = parser.Read(stream, sheet);
+        var layout = StatementReader.Analyze(statement) ?? throw new InvalidOperationException("Archivo vacío.");
+        return StatementReader.Parse(statement, layout, new ImportColumnMapping(date, amount, description), Today);
+    }
+
+    public static ImportFileSample Sample(this ITransactionFileParser parser, Stream stream, int maxRows)
+    {
+        var statement = parser.Read(stream);
+        var layout = StatementReader.Analyze(statement);
+        return layout is null ? new ImportFileSample([], []) : StatementReader.Sample(statement, layout, maxRows);
+    }
+}
+
 public class CsvTransactionFileParserTests
 {
     private readonly CsvTransactionFileParser _parser = new();
@@ -149,7 +172,7 @@ public class ExcelTransactionFileParserTests
     public void Parse_MarcaErroresPorFila()
     {
         var rows = _parser.Parse(Workbook(), "Fecha", "Valor", "Concepto");
-        Assert.Equal("Fecha inválida o vacía.", rows[2].Error);
+        Assert.Equal("Fecha inválida: 'no es fecha'.", rows[2].Error);
         Assert.Equal("Descripción vacía.", rows[3].Error);
     }
 

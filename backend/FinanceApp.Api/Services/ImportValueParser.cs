@@ -51,6 +51,87 @@ public static partial class ImportValueParser
     }
 
     /// <summary>
+    /// Fecha sin año, día primero ("1/07", "30-09"), como la exportan los extractos de ahorros de Bancolombia.
+    /// Solo valida rangos básicos; el año lo resuelve <see cref="ResolveYear"/> con el periodo del extracto.
+    /// </summary>
+    public static bool TryParseDayMonth(string? raw, out int day, out int month)
+    {
+        day = month = 0;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var match = DayMonth().Match(raw.Trim());
+        if (!match.Success)
+            return false;
+
+        day = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        month = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+        return day is >= 1 and <= 31 && month is >= 1 and <= 12;
+    }
+
+    /// <summary>
+    /// Asigna año a una fecha día/mes. Con periodo del extracto (DESDE/HASTA) elige el año que cae dentro de él,
+    /// lo que resuelve los extractos que cruzan diciembre → enero. Sin periodo, asume la fecha más reciente que
+    /// no sea posterior a <paramref name="referenceDate"/> (normalmente hoy).
+    /// </summary>
+    public static bool ResolveYear(int day, int month, StatementPeriod? period, DateTime referenceDate, out DateTime date)
+    {
+        date = default;
+
+        if (period is not null)
+        {
+            // Holgura de una semana: algunos bancos registran movimientos con fecha valor justo fuera del corte.
+            var from = period.Start.AddDays(-7);
+            var to = period.End.AddDays(7);
+            for (var year = period.End.Year; year >= period.Start.Year; year--)
+            {
+                if (TryBuild(year, month, day, out var candidate) && candidate >= from && candidate <= to)
+                {
+                    date = candidate;
+                    return true;
+                }
+            }
+
+            referenceDate = period.End;
+        }
+
+        if (TryBuild(referenceDate.Year, month, day, out var current) && current <= referenceDate.Date)
+        {
+            date = current;
+            return true;
+        }
+
+        return TryBuild(referenceDate.Year - 1, month, day, out date);
+    }
+
+    private static bool TryBuild(int year, int month, int day, out DateTime date)
+    {
+        date = default;
+        if (day > DateTime.DaysInMonth(year, month))
+            return false;
+
+        date = new DateTime(year, month, day);
+        return true;
+    }
+
+    /// <summary>"DOLARES", "USD", "Pesos" → código ISO; null si no hay valor.</summary>
+    public static string? NormalizeCurrency(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        var value = Normalize(raw);
+        if (value.Contains("dolar") || value.Contains("usd") || value.Contains("us$"))
+            return "USD";
+        if (value.Contains("peso") || value.Contains("cop"))
+            return "COP";
+        if (value.Contains("euro") || value.Contains("eur"))
+            return "EUR";
+
+        return raw.Trim().ToUpperInvariant();
+    }
+
+    /// <summary>
     /// Acepta "38.900", "-38900", "$ 1.234.567,89", "1,234,567.89", "(5.000)", "5.000-", "COP 12.000".
     /// Regla del separador: si hay "." y "," el último es el decimal; si hay uno solo, se toma como
     /// separador de miles cuando se repite o le siguen exactamente 3 dígitos (lo habitual en pesos).
@@ -153,10 +234,13 @@ public static partial class ImportValueParser
         return new ColumnSuggestion(
             Find("fecha", "date"),
             Find("valor", "monto", "importe", "amount", "cantidad", "total"),
-            Find("descripcion", "concepto", "detalle", "description", "comercio", "referencia", "transaccion"));
+            // "movimiento" = columna "Movimientos" de las tarjetas Bancolombia. Va al final para no
+            // ganarle a "descripcion"; "Valor Movimiento" va después de "Movimientos" en ese extracto.
+            Find("descripcion", "concepto", "detalle", "description", "comercio", "referencia", "transaccion", "movimiento"));
     }
 
-    private static string Normalize(string value)
+    /// <summary>Minúsculas, sin tildes y sin espacios en los extremos (para comparar encabezados y etiquetas).</summary>
+    public static string Normalize(string value)
     {
         var decomposed = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
         return new string(decomposed.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray());
@@ -164,4 +248,7 @@ public static partial class ImportValueParser
 
     [GeneratedRegex(@"[^\d,.\-+]")]
     private static partial Regex NonNumeric();
+
+    [GeneratedRegex(@"^(\d{1,2})[/-](\d{1,2})$")]
+    private static partial Regex DayMonth();
 }

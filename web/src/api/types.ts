@@ -48,6 +48,15 @@ export interface ImportInspectResponse {
   suggestedDateColumn: string | null
   suggestedAmountColumn: string | null
   suggestedDescriptionColumn: string | null
+  /** Hojas del libro (vacío en CSV). */
+  sheets: string[]
+  sheet: string | null
+  /** Moneda que declara la hoja ("COP", "USD"…); null si no la declara. */
+  detectedCurrency: string | null
+  /** Parece tarjeta de crédito (cargos en positivo). */
+  suggestInvertSign: boolean
+  periodStart: string | null
+  periodEnd: string | null
 }
 
 export interface ImportRowPreview {
@@ -57,6 +66,8 @@ export interface ImportRowPreview {
   description: string | null
   isDuplicate: boolean
   error: string | null
+  /** La fecha venía sin año ("1/07") y se dedujo. */
+  yearInferred: boolean
 }
 
 export interface ImportPreviewResponse {
@@ -65,6 +76,11 @@ export interface ImportPreviewResponse {
   errorRows: number
   duplicateRows: number
   rows: ImportRowPreview[]
+  /** Filas que no son movimientos (encabezados repetidos, datos del cliente, resumen). */
+  ignoredRows: number
+  yearInferredRows: number
+  periodStart: string | null
+  periodEnd: string | null
 }
 
 export interface ImportConfirmRow {

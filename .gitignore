@@ -16,3 +16,6 @@ Thumbs.db
 .claude/settings.local.json
 CLAUDE.local.md
 .claude/memory/
+
+# Extractos bancarios reales (datos personales: nombre, dirección, números de cuenta)
+extractos-prueba/

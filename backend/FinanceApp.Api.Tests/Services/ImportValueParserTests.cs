@@ -130,4 +130,101 @@ public class ImportValueParserTests
         Assert.Null(s.AmountColumn);
         Assert.Null(s.DescriptionColumn);
     }
+
+    // ---------- Fechas sin año (extractos Bancolombia ahorros: "1/07") ----------
+
+    [Theory]
+    [InlineData("1/07", 1, 7)]
+    [InlineData("30/09", 30, 9)]
+    [InlineData(" 05-12 ", 5, 12)]
+    public void TryParseDayMonth_DiaPrimero(string raw, int day, int month)
+    {
+        Assert.True(ImportValueParser.TryParseDayMonth(raw, out var d, out var m));
+        Assert.Equal((day, month), (d, m));
+    }
+
+    [Theory]
+    [InlineData("1/13")]
+    [InlineData("32/01")]
+    [InlineData("0/05")]
+    [InlineData("05/11/2026")] // con año: no es día/mes
+    [InlineData("1.07")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void TryParseDayMonth_RechazaValoresInvalidos(string? raw) =>
+        Assert.False(ImportValueParser.TryParseDayMonth(raw, out _, out _));
+
+    [Fact]
+    public void TryParseDate_NoAceptaFechasSinAnio()
+    {
+        // TryParseDate no debe inventar el año actual: eso lo decide ResolveYear con el periodo.
+        Assert.False(ImportValueParser.TryParseDate("1/07", out _));
+    }
+
+    private static readonly DateTime Today = new(2026, 11, 6);
+
+    [Theory]
+    [InlineData(15, 12, 2026, 12, 15)] // periodo nov 2026 – feb 2027
+    [InlineData(10, 1, 2027, 1, 10)]
+    [InlineData(28, 11, 2026, 11, 28)] // holgura: 2 días antes del inicio
+    public void ResolveYear_ConPeriodoQueCruzaElAnio(int day, int month, int y, int m, int d)
+    {
+        var period = new StatementPeriod(new DateTime(2026, 11, 30), new DateTime(2027, 2, 28));
+        Assert.True(ImportValueParser.ResolveYear(day, month, period, Today, out var date));
+        Assert.Equal(new DateTime(y, m, d), date);
+    }
+
+    [Theory]
+    [InlineData(6, 11, 2026)] // hoy
+    [InlineData(1, 1, 2026)]
+    [InlineData(7, 11, 2025)] // mañana → sería futura, va al año anterior
+    [InlineData(31, 12, 2025)]
+    public void ResolveYear_SinPeriodo_FechaMasRecienteNoFutura(int day, int month, int year)
+    {
+        Assert.True(ImportValueParser.ResolveYear(day, month, null, Today, out var date));
+        Assert.Equal(new DateTime(year, month, day), date);
+    }
+
+    [Fact]
+    public void ResolveYear_29DeFebrero()
+    {
+        var period = new StatementPeriod(new DateTime(2028, 1, 1), new DateTime(2028, 3, 31));
+        Assert.True(ImportValueParser.ResolveYear(29, 2, period, Today, out var leap));
+        Assert.Equal(new DateTime(2028, 2, 29), leap);
+
+        // 2026 no es bisiesto y 2025 tampoco: no hay fecha válida.
+        Assert.False(ImportValueParser.ResolveYear(29, 2, null, Today, out _));
+        Assert.False(ImportValueParser.ResolveYear(31, 4, null, Today, out _)); // 31 de abril
+    }
+
+    [Theory]
+    [InlineData("DOLARES", "USD")]
+    [InlineData("Dólares", "USD")]
+    [InlineData("usd", "USD")]
+    [InlineData("PESOS", "COP")]
+    [InlineData("COP", "COP")]
+    [InlineData("Euros", "EUR")]
+    [InlineData("mxn", "MXN")]
+    [InlineData("  ", null)]
+    public void NormalizeCurrency_ACodigoIso(string raw, string? expected) =>
+        Assert.Equal(expected, ImportValueParser.NormalizeCurrency(raw));
+
+    [Fact]
+    public void SuggestColumns_TarjetaBancolombia_MovimientosEsLaDescripcion()
+    {
+        var s = ImportValueParser.SuggestColumns(["Número de autorización", "Fecha", "Movimientos", "Valor Movimiento", "Número de cuotas"]);
+        Assert.Equal("Movimientos", s.DescriptionColumn);
+        Assert.Equal("Valor Movimiento", s.AmountColumn);
+    }
+
+    [Theory]
+    [InlineData("-30,000.00", -30000)] // ahorros Bancolombia (formato US)
+    [InlineData(".37", 0.37)]
+    [InlineData("4.342.466,00", 4342466)] // tarjeta Bancolombia (formato local)
+    [InlineData("-453.766,00", -453766)]
+    public void TryParseAmount_FormatosDeExtractosBancolombia(string raw, decimal expected)
+    {
+        Assert.True(ImportValueParser.TryParseAmount(raw, out var amount));
+        Assert.Equal(expected, amount);
+    }
 }

@@ -1,118 +1,48 @@
-using System.Globalization;
 using ClosedXML.Excel;
 
 namespace FinanceApp.Api.Services;
 
+/// <summary>
+/// Lee .xlsx conservando el valor nativo de cada celda (fecha/número) además del texto visible.
+/// Soporta libros con varias hojas (p. ej. tarjeta Bancolombia: "PESOS" y "DOLARES").
+/// </summary>
 public class ExcelTransactionFileParser : ITransactionFileParser
 {
     public bool CanParse(string fileName) =>
         fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
 
-    public ImportFileSample Sample(Stream fileStream, int maxRows)
+    public StatementSheet Read(Stream fileStream, string? sheetName = null)
     {
         using var workbook = new XLWorkbook(fileStream);
-        var worksheet = workbook.Worksheets.First();
-        var headerRow = worksheet.FirstRowUsed();
-        if (headerRow is null)
-            return new ImportFileSample([], []);
+        var names = workbook.Worksheets.Select(w => w.Name).ToList();
 
-        var headerCells = headerRow.CellsUsed().ToList();
-        var headers = headerCells.Select(c => c.GetString().Trim()).ToList();
+        var worksheet = string.IsNullOrWhiteSpace(sheetName)
+            ? workbook.Worksheets.First()
+            : workbook.Worksheets.FirstOrDefault(w => string.Equals(w.Name, sheetName.Trim(), StringComparison.OrdinalIgnoreCase))
+              ?? throw new InvalidOperationException($"El archivo no tiene una hoja llamada '{sheetName}'.");
+
+        var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
         var rows = worksheet.RowsUsed()
-            .Where(r => r.RowNumber() > headerRow.RowNumber())
-            .Take(maxRows)
-            .Select(r => (IReadOnlyList<string>)headerCells
-                .Select(h => r.Cell(h.Address.ColumnNumber).GetFormattedString().Trim())
-                .ToList())
+            .Select(r => new SheetRow(
+                r.RowNumber(),
+                Enumerable.Range(1, lastColumn).Select(c => ToCell(r.Cell(c))).ToList()))
+            .Where(r => r.Cells.Any(c => !c.IsEmpty))
             .ToList();
 
-        return new ImportFileSample(headers, rows);
+        return new StatementSheet(names, worksheet.Name, rows);
     }
 
-    public IReadOnlyList<ParsedImportRow> Parse(
-        Stream fileStream,
-        string dateColumn,
-        string amountColumn,
-        string descriptionColumn)
-    {
-        using var workbook = new XLWorkbook(fileStream);
-        var worksheet = workbook.Worksheets.First();
-        var headerRow = worksheet.FirstRowUsed();
-
-        if (headerRow is null)
-            return [];
-
-        var columnIndexes = headerRow.CellsUsed()
-            .GroupBy(c => c.GetString().Trim())
-            .ToDictionary(g => g.Key, g => g.First().Address.ColumnNumber);
-
-        if (!columnIndexes.TryGetValue(dateColumn.Trim(), out var dateCol) ||
-            !columnIndexes.TryGetValue(amountColumn.Trim(), out var amountCol) ||
-            !columnIndexes.TryGetValue(descriptionColumn.Trim(), out var descCol))
-        {
-            throw new InvalidOperationException(
-                "No se encontraron todas las columnas indicadas en el encabezado del archivo.");
-        }
-
-        var rows = new List<ParsedImportRow>();
-
-        foreach (var row in worksheet.RowsUsed().Where(r => r.RowNumber() > headerRow.RowNumber()))
-        {
-            var rowNumber = row.RowNumber();
-            var description = row.Cell(descCol).GetString().Trim();
-            var hasDate = TryReadDate(row.Cell(dateCol), out var date);
-            var hasAmount = TryReadAmount(row.Cell(amountCol), out var amount);
-
-            if (!hasDate)
-            {
-                rows.Add(new ParsedImportRow(rowNumber, null, hasAmount ? amount : null, description, "Fecha inválida o vacía."));
-                continue;
-            }
-
-            if (!hasAmount)
-            {
-                rows.Add(new ParsedImportRow(rowNumber, date, null, description, "Monto inválido o vacío."));
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                rows.Add(new ParsedImportRow(rowNumber, date, amount, description, "Descripción vacía."));
-                continue;
-            }
-
-            rows.Add(new ParsedImportRow(rowNumber, date, amount, description, null));
-        }
-
-        return rows;
-    }
-
-    /// <summary>Celda fecha nativa, número serial de Excel o texto ("05/11/2026").</summary>
-    private static bool TryReadDate(IXLCell cell, out DateTime date)
+    private static SheetCell ToCell(IXLCell cell)
     {
         var value = cell.Value;
+        var text = cell.GetFormattedString().Trim();
+
         if (value.IsDateTime)
-        {
-            date = value.GetDateTime().Date;
-            return true;
-        }
+            return new SheetCell(text, Date: value.GetDateTime().Date);
 
         if (value.IsNumber)
-            return ImportValueParser.TryParseDate(value.GetNumber().ToString(CultureInfo.InvariantCulture), out date);
+            return new SheetCell(text, Number: (decimal)value.GetNumber());
 
-        return ImportValueParser.TryParseDate(cell.GetString(), out date);
-    }
-
-    /// <summary>Celda numérica nativa o texto con formato local ("$ -38.900"). No usa la cultura del servidor.</summary>
-    private static bool TryReadAmount(IXLCell cell, out decimal amount)
-    {
-        var value = cell.Value;
-        if (value.IsNumber)
-        {
-            amount = (decimal)value.GetNumber();
-            return true;
-        }
-
-        return ImportValueParser.TryParseAmount(cell.GetString(), out amount);
+        return new SheetCell(text);
     }
 }

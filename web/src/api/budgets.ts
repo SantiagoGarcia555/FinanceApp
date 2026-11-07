@@ -18,9 +18,5 @@ export function deleteBudget(id: string) {
   return api<void>(`/api/budgets/${id}`, { method: 'DELETE' })
 }
 
-/** Color como dato: bosque = en orden, sol = cerca del límite, terracota = excedido. */
-export function budgetTone(percentUsed: number): 'brand' | 'progress' | 'accent' {
-  if (percentUsed >= 100) return 'accent'
-  if (percentUsed >= 80) return 'progress'
-  return 'brand'
-}
+// Color como dato (bosque/sol/terracota): lógica común con la app móvil
+export { budgetTone } from '../../../shared/dashboard'

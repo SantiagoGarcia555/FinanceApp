@@ -9,12 +9,11 @@ import type {
   TransactionResponse,
   TrendResponse,
 } from '../../api/types'
+import { currentMonth } from '../../../../shared/dashboard'
 
 export interface DashboardData {
   /** GET api/dashboard/summary?month=yyyy-MM */
   summary: MonthlySummaryResponse
-  /** Mes anterior (de api/dashboard/trend). null si no tuvo movimientos. */
-  previousMonth: MonthlyTrendPoint | null
   /** Últimos 6 meses, del más antiguo al actual. */
   trend: MonthlyTrendPoint[]
   /** GET api/transactions (las más recientes; la API ordena por fecha descendente). */
@@ -25,16 +24,10 @@ export interface DashboardData {
   budgets: BudgetResponse[]
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-
-export function currentMonth(now = new Date()): string {
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`
-}
-
 /**
  * Carga todo lo que necesita el dashboard en paralelo.
  * Los insights de IA llegan en la fase 2 (ISavingsInsightService); mientras tanto el dashboard
- * los deriva de presupuestos y gastos reales del mes.
+ * los deriva de presupuestos y gastos reales del mes (shared/dashboard.ts).
  */
 export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData> {
   const month = currentMonth()
@@ -46,11 +39,8 @@ export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData
     listBudgets(month, signal),
   ])
 
-  const prev = trend.months.length >= 2 ? trend.months[trend.months.length - 2] : null
-
   return {
     summary,
-    previousMonth: prev && (prev.totalIncome !== 0 || prev.totalExpense !== 0) ? prev : null,
     trend: trend.months,
     recentTransactions: transactions.items,
     categoryIcons: Object.fromEntries(categories.map((c) => [c.id, c.icon])),

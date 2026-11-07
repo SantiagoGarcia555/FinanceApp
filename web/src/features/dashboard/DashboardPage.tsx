@@ -17,8 +17,9 @@ import {
   TransactionRow,
 } from '../../components/ui'
 import { cn } from '../../lib/cn'
-import { formatCompactMoney, formatMoney, formatMonthName, formatNumber, formatPercent, formatRelativeDay, formatToday } from '../../lib/format'
+import { formatCompactMoney, formatMonthName, formatNumber, formatPercent, formatRelativeDay, formatToday } from '../../lib/format'
 import { delay } from '../../lib/motion'
+import { buildDashboardView } from '../../../../shared/dashboard'
 import { useTransactions } from '../transactions/TransactionsContext'
 import { CategoryBreakdown } from './CategoryBreakdown'
 import { loadDashboard, type DashboardData } from './dashboardData'
@@ -29,12 +30,6 @@ type State = { status: 'loading' } | { status: 'error'; message: string } | { st
 /** Entrada escalonada: retardo + distancia desde la que sube. */
 function rise(ms: number, from = 24): CSSProperties {
   return { ...delay(ms), '--rise-from': `${from}px` } as CSSProperties
-}
-
-/** "2026-11" → "oct" (mes anterior, abreviado) */
-function previousMonthShort(month: string): string {
-  const [y, m] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat('es-CO', { month: 'short' }).format(new Date(y, m - 2, 1)).replace('.', '')
 }
 
 function Blobs() {
@@ -143,43 +138,19 @@ function Dashboard({
   onNavigate: (to: string) => void
   onEdit: (transaction: DashboardData['recentTransactions'][number]) => void
 }) {
-  const { summary, previousMonth, recentTransactions, categoryIcons } = data
-  const hasActivity = summary.totalIncome !== 0 || summary.totalExpense !== 0 || recentTransactions.length > 0
-  const spent = Math.abs(summary.totalExpense)
-  const negative = summary.balance < 0
+  const { summary, recentTransactions, categoryIcons } = data
+  // Qué mostrar (comparación vs mes anterior, presupuestos, sugerencia): lógica común con la app móvil
+  const view = buildDashboardView({ summary, trend: data.trend, budgets: data.budgets, recentCount: recentTransactions.length })
+  const { hasActivity, spent, expenseChange, hasTrend, monthlyBudgets } = view
+  const negative = view.negativeBalance
 
-  // US-12: comparación simple del GASTO total con el mes anterior
-  const prevSpent = previousMonth ? Math.abs(previousMonth.totalExpense) : 0
-  const expenseChange = prevSpent > 0 ? ((spent - prevSpent) / prevSpent) * 100 : null
-  const hasTrend = data.trend.filter((m) => m.totalIncome !== 0 || m.totalExpense !== 0).length >= 2
-
-  const top = summary.expensesByCategory[0]
-  const topShare = top && spent > 0 ? Math.round((top.total / spent) * 100) : 0
-
-  // Presupuestos mensuales (la API los ordena por % usado, de mayor a menor)
-  const monthlyBudgets = data.budgets.filter((b) => b.period === 'monthly')
-  const budgetLimit = monthlyBudgets.reduce((acc, b) => acc + b.limitAmount, 0)
-  const budgetSpent = monthlyBudgets.reduce((acc, b) => acc + b.spent, 0)
-  const over = monthlyBudgets.find((b) => b.percentUsed >= 100)
-  const near = monthlyBudgets.find((b) => b.percentUsed >= 80 && b.percentUsed < 100)
-
-  // Sugerencia derivada de datos reales (prioridad: presupuesto excedido > cerca del límite > mayor categoría)
-  const insight = over
-    ? {
-        message: `Te pasaste ${formatMoney(-over.remaining)} en ${over.categoryName} este mes. Revisa esos gastos o ajusta el presupuesto.`,
-        action: { label: 'Ver presupuestos', onClick: () => onNavigate('/presupuestos') },
-      }
-    : near
-      ? {
-          message: `Ya usaste el ${Math.round(near.percentUsed)}% de tu presupuesto de ${near.categoryName}. Te quedan ${formatMoney(near.remaining)} para el resto del mes.`,
-          action: { label: 'Ver presupuestos', onClick: () => onNavigate('/presupuestos') },
-        }
-      : top && topShare > 0
-        ? {
-            message: `Este mes, ${top.categoryName} se lleva el ${topShare}% de tus gastos (${formatMoney(top.total)}). Revisa si hay algo que puedas ajustar.`,
-            action: { label: 'Ver movimientos', onClick: () => onNavigate('/movimientos') },
-          }
-        : null
+  const insight = view.insight && {
+    message: view.insight.message,
+    action:
+      view.insight.target === 'budgets'
+        ? { label: 'Ver presupuestos', onClick: () => onNavigate('/presupuestos') }
+        : { label: 'Ver movimientos', onClick: () => onNavigate('/movimientos') },
+  }
 
   return (
     <>
@@ -198,7 +169,7 @@ function Dashboard({
             {expenseChange !== null && (
               // Gastar más es alerta (terracota); gastar menos, a favor (bosque)
               <Chip tone={expenseChange > 0 ? 'alert' : 'positive'} icon={expenseChange > 0 ? ArrowUpRight : ArrowDownRight}>
-                {formatPercent(Math.abs(expenseChange))} {expenseChange > 0 ? 'más' : 'menos'} que {previousMonthShort(summary.month)}
+                {formatPercent(Math.abs(expenseChange))} {expenseChange > 0 ? 'más' : 'menos'} que {view.previousMonthLabel}
               </Chip>
             )}
           </div>
@@ -213,7 +184,7 @@ function Dashboard({
           style={rise(900, 30)}
         >
           <BudgetRing
-            percent={budgetLimit ? (budgetSpent / budgetLimit) * 100 : 0}
+            percent={view.budgetPercent}
             label="usado"
             description="de tu presupuesto del mes usado"
             animationDelay={1000}
@@ -272,7 +243,7 @@ function Dashboard({
               </Link>
             )}
           </div>
-          <CategoryBreakdown categories={summary.expensesByCategory} />
+          <CategoryBreakdown items={view.breakdown} />
         </section>
       )}
 

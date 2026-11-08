@@ -5,8 +5,12 @@ App Android (fase 1) e iOS (fase 4). Expo SDK 58 · React Native 0.88 · React 1
 Estado:
 - **1.3.0**: tokens de diseño y librería de componentes "Raíz × Aurora".
 - **1.3.1**: Expo Router + login/registro contra la **API de producción**, sesión persistente
-  (refresh token cifrado con expo-secure-store) y tabs con la nav flotante. Inicio, Análisis y
-  Billetera muestran "muy pronto" hasta 1.3.2–1.3.4. El catálogo de componentes está en Perfil.
+  (refresh token cifrado con expo-secure-store) y tabs con la nav flotante. El catálogo de componentes está en Perfil.
+- **1.3.2**: Inicio = dashboard con datos reales (reglas comunes con la web en `shared/dashboard.ts`).
+- **1.3.3**: alta rápida desde el `+` (monto → categoría → Guardar) y edición/eliminación en la misma hoja.
+- **1.3.4**: Billetera = movimientos del mes con filtros, agrupados por día y con scroll infinito.
+- **1.3.6** (en curso): `eas.json` listo; el primer build espera el `android.package` (branding). Ver
+  [Builds instalables](#builds-instalables-eas-136). Análisis sigue en "muy pronto".
 
 ## Correr en tu teléfono (sin Android Studio)
 
@@ -36,6 +40,39 @@ rápido. **La referencia es el teléfono**: sombras, fuentes y teclado se compor
 
 Para agregar dependencias usa **`npx expo install <paquete>`** (no `npm install`): elige la
 versión compatible con el SDK.
+
+## Builds instalables (EAS, 1.3.6)
+
+Se compilan en la nube de Expo (EAS Build): esta máquina no tiene Android SDK. Perfiles en `eas.json`:
+
+| Perfil | Qué produce | Para qué |
+|---|---|---|
+| `preview` | APK independiente (JS empaquetado, apunta a producción) | Instalarla y usarla a diario sin la PC (1.4.3) |
+| `development` | APK "dev client": reemplaza a Expo Go con nuestro código nativo | Desarrollar 1.3.5 (compartir archivo → intent filters, no corre en Expo Go) |
+| `production` | AAB para Play Store | Fase 5 |
+
+**Pendiente antes del primer build:** definir `expo.android.package` en `app.json` (se decide en el
+ejercicio de branding; queda fijo para siempre tras la primera subida a Play Store).
+
+Pasos (una sola vez):
+
+1. Token de acceso en https://expo.dev → Account settings → Access tokens (`npx expo login` falla en
+   Windows). En la terminal: `$env:EXPO_TOKEN = "<token>"` (PowerShell). No se guarda en el repo.
+2. `npx eas-cli@latest init` → vincula el proyecto a tu cuenta (agrega `extra.eas.projectId` a `app.json`).
+3. Agregar `"package": "com.<…>"` dentro de `"android"` en `app.json`.
+4. Solo para el perfil `development`: `npx expo install expo-dev-client`. Ojo: con ese paquete,
+   `npm start` abre el dev client en vez de Expo Go (para seguir con Expo Go: `npx expo start --go`).
+
+Builds:
+
+```
+npx eas-cli@latest build -p android --profile preview      # APK para usar a diario
+npx eas-cli@latest build -p android --profile development  # dev client
+```
+
+Al terminar, EAS da un link/QR para descargar el APK en el teléfono (hay que permitir "instalar apps
+de origen desconocido" para el navegador). La primera vez EAS ofrece generar el keystore de firma:
+aceptar (lo guarda EAS; no perderlo, sin él no se pueden publicar actualizaciones en Play Store).
 
 ## Estructura
 

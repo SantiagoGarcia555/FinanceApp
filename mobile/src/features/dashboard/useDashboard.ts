@@ -19,7 +19,10 @@ const messageOf = (error: unknown) => (error instanceof ApiError ? error.message
  * (los datos pueden haber cambiado desde la web u otro dispositivo).
  * Mismo patrón que la web: cada recarga sube `reloadKey` y el efecto hace la petición.
  */
-export function useDashboard() {
+export function useDashboard(
+  /** Sube al crear/editar/eliminar un movimiento (TransactionsContext): recarga sin esqueleto. */
+  version = 0,
+) {
   const [state, setState] = useState<DashboardState>({ status: 'loading' })
   const [refreshing, setRefreshing] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
@@ -48,7 +51,7 @@ export function useDashboard() {
         setRefreshing(false)
       })
     return () => controller.abort()
-  }, [reloadKey])
+  }, [reloadKey, version])
 
   const reloadIfStale = useCallback(() => {
     if (loadedAt.current && !inFlight.current && Date.now() - loadedAt.current > STALE_MS) setReloadKey((k) => k + 1)

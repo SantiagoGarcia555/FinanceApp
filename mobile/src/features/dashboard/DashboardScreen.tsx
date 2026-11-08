@@ -9,6 +9,7 @@ import { formatCompactMoney, formatMonthName, formatNumber, formatPercent, forma
 import { colors, fonts, radius, shadows, space, type, withAlpha } from '../../theme'
 import { budgetTone, buildDashboardView } from '../../../../shared/dashboard'
 import { CategoryBreakdown } from './CategoryBreakdown'
+import { useTransactions } from '../transactions/TransactionsContext'
 import type { DashboardData } from './dashboardData'
 import { TrendChart } from './TrendChart'
 import { useDashboard } from './useDashboard'
@@ -16,7 +17,8 @@ import { useDashboard } from './useDashboard'
 /** Inicio (1.3.2): versión móvil del dashboard de la web, con los mismos datos y reglas (shared/dashboard.ts). */
 export function DashboardScreen() {
   const { user } = useAuth()
-  const { state, refreshing, refresh, retry } = useDashboard()
+  const { version, openNew, openEdit } = useTransactions()
+  const { state, refreshing, refresh, retry } = useDashboard(version)
   const slow = useSlow(state.status === 'loading')
   const firstName = user?.name.trim().split(/\s+/)[0] ?? ''
 
@@ -84,20 +86,28 @@ export function DashboardScreen() {
               No pudimos actualizar: {state.refreshError}
             </Text>
           )}
-          <Dashboard data={state.data} />
+          <Dashboard data={state.data} onAdd={openNew} onEdit={openEdit} />
         </>
       )}
     </Screen>
   )
 }
 
-function Dashboard({ data }: { data: DashboardData }) {
+function Dashboard({
+  data,
+  onAdd,
+  onEdit,
+}: {
+  data: DashboardData
+  onAdd: () => void
+  onEdit: (transaction: DashboardData['recentTransactions'][number]) => void
+}) {
   const [insightDismissed, setInsightDismissed] = useState(false)
   const { summary, recentTransactions, categoryIcons } = data
   const view = buildDashboardView({ summary, trend: data.trend, budgets: data.budgets, recentCount: recentTransactions.length })
   const { expenseChange, monthlyBudgets } = view
   const negative = view.negativeBalance
-  // Las pantallas de presupuestos y movimientos llegan en 1.3.3/1.3.4: por ahora la sugerencia solo se descarta
+  // Presupuestos y el listado de movimientos aún no existen en el móvil (1.3.4): por ahora la sugerencia solo se descarta
   const dismiss = { label: 'Entendido', onPress: () => setInsightDismissed(true) }
 
   return (
@@ -154,8 +164,9 @@ function Dashboard({ data }: { data: DashboardData }) {
           <Rise delay={650} from={36}>
             <InsightCard
               title="Empecemos a echar raíces"
-              message="Registra tu primer movimiento o importa el extracto de tu banco desde la web, y aquí verás a dónde se va tu plata."
-              primaryAction={dismiss}
+              message="Registra tu primer movimiento (o importa el extracto de tu banco desde la web) y aquí verás a dónde se va tu plata."
+              primaryAction={{ label: 'Registrar movimiento', onPress: onAdd }}
+              secondaryAction={{ label: 'Después', onPress: () => setInsightDismissed(true) }}
             />
           </Rise>
         ) : (
@@ -200,6 +211,7 @@ function Dashboard({ data }: { data: DashboardData }) {
                   detail={`${t.categoryName ?? 'Sin categoría'} · ${formatRelativeDay(t.date)}`}
                   amount={t.amount}
                   icon={categoryIcon(t.categoryId ? categoryIcons[t.categoryId] : null)}
+                  onPress={() => onEdit(t)}
                 />
               </Rise>
             ))}
@@ -207,7 +219,7 @@ function Dashboard({ data }: { data: DashboardData }) {
         ) : (
           <Rise delay={1000} from={18} style={[styles.card, styles.empty]}>
             <Text style={[type.bodySm, styles.center, { color: colors.fgMuted }]}>
-              Aún no tienes movimientos. Muy pronto podrás registrarlos con el botón + ; mientras tanto, hazlo desde la web.
+              Aún no tienes movimientos. Usa el botón <Text style={[type.label, { color: colors.fgAccent }]}>+</Text> para registrar el primero.
             </Text>
           </Rise>
         )}

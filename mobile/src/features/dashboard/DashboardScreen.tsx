@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useRouter } from 'expo-router'
 import { ArrowDownRight, ArrowUpRight, CloudOff, Sun } from 'lucide-react-native'
 import { RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/AuthContext'
@@ -18,6 +19,7 @@ import { useDashboard } from './useDashboard'
 export function DashboardScreen() {
   const { user } = useAuth()
   const { version, openNew, openEdit } = useTransactions()
+  const router = useRouter()
   const { state, refreshing, refresh, retry } = useDashboard(version)
   const slow = useSlow(state.status === 'loading')
   const firstName = user?.name.trim().split(/\s+/)[0] ?? ''
@@ -86,7 +88,7 @@ export function DashboardScreen() {
               No pudimos actualizar: {state.refreshError}
             </Text>
           )}
-          <Dashboard data={state.data} onAdd={openNew} onEdit={openEdit} />
+          <Dashboard data={state.data} onAdd={openNew} onEdit={openEdit} onSeeAll={() => router.navigate('/billetera')} />
         </>
       )}
     </Screen>
@@ -97,9 +99,11 @@ function Dashboard({
   data,
   onAdd,
   onEdit,
+  onSeeAll,
 }: {
   data: DashboardData
   onAdd: () => void
+  onSeeAll: () => void
   onEdit: (transaction: DashboardData['recentTransactions'][number]) => void
 }) {
   const [insightDismissed, setInsightDismissed] = useState(false)
@@ -107,8 +111,12 @@ function Dashboard({
   const view = buildDashboardView({ summary, trend: data.trend, budgets: data.budgets, recentCount: recentTransactions.length })
   const { expenseChange, monthlyBudgets } = view
   const negative = view.negativeBalance
-  // Presupuestos y el listado de movimientos aún no existen en el móvil (1.3.4): por ahora la sugerencia solo se descarta
   const dismiss = { label: 'Entendido', onPress: () => setInsightDismissed(true) }
+  // Presupuestos aún no existen en el móvil: esa sugerencia solo se descarta; la de categoría lleva a Billetera
+  const insightActions =
+    view.insight?.target === 'transactions'
+      ? { primaryAction: { label: 'Ver movimientos', onPress: onSeeAll }, secondaryAction: { label: 'Después', onPress: dismiss.onPress } }
+      : { primaryAction: dismiss }
 
   return (
     <>
@@ -172,7 +180,7 @@ function Dashboard({
         ) : (
           view.insight && (
             <Rise delay={650} from={36}>
-              <InsightCard message={view.insight.message} primaryAction={dismiss} />
+              <InsightCard message={view.insight.message} {...insightActions} />
             </Rise>
           )
         ))}
@@ -200,7 +208,7 @@ function Dashboard({
       {/* Movimientos recientes */}
       <View style={styles.recent}>
         <Rise delay={900} from={16}>
-          <SectionHeader title="Movimientos" />
+          <SectionHeader title="Movimientos" action={recentTransactions.length ? { label: 'Ver todo', onPress: onSeeAll } : undefined} />
         </Rise>
         {recentTransactions.length > 0 ? (
           <View style={[styles.card, styles.list]}>

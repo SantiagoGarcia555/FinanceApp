@@ -84,7 +84,7 @@ export function FundamentosScreen({ onBack }: { onBack?: () => void }) {
           {onBack && <IconButton icon={ArrowLeft} label="Volver" onPress={onBack} style={styles.back} />}
           <Text style={[type.caption, { color: colors.fgMuted }]}>Finance APP · Fundamentos y componentes</Text>
           <Text style={[type.h1, { color: colors.fg }]}>Raíz × Aurora</Text>
-          <Text style={styles.brand}>raíz</Text>
+          <Text style={styles.brand}>tino</Text>
         </Rise>
 
         <Block title="Color" delay={60}>

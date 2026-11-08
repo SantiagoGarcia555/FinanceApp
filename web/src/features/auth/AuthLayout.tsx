@@ -3,7 +3,7 @@ import { Sprout } from 'lucide-react'
 import { delay } from '../../lib/motion'
 
 // Nombre de trabajo de la marca (no validado): centralizado aquí para cambiarlo fácil.
-export const BRAND_NAME = 'raíz'
+export const BRAND_NAME = 'tino'
 
 export function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer: ReactNode }) {
   return (

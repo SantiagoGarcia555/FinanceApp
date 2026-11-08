@@ -14,7 +14,7 @@ export interface InsightCardProps {
   style?: StyleProp<ViewStyle>
 }
 
-export function InsightCard({ message, title = 'Raíz te sugiere', time, primaryAction, secondaryAction, style }: InsightCardProps) {
+export function InsightCard({ message, title = 'Tino te sugiere', time, primaryAction, secondaryAction, style }: InsightCardProps) {
   return (
     <View accessibilityLabel={title} style={[styles.card, style]}>
       <View style={styles.header}>

@@ -13,7 +13,7 @@ import type { TextStyle } from 'react-native'
 export const fonts = {
   display: 'Fraunces_600SemiBold',
   displayLight: 'Fraunces_300Light',
-  /** Voz de la IA ("Raíz te sugiere"). */
+  /** Voz de la IA ("Tino te sugiere"). */
   displayItalic: 'Fraunces_400Regular_Italic',
   /** Marca en login/registro. */
   displayBoldItalic: 'Fraunces_600SemiBold_Italic',

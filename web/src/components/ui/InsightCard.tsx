@@ -13,7 +13,7 @@ export interface InsightCardProps {
   className?: string
 }
 
-export function InsightCard({ message, title = 'Raíz te sugiere', time, primaryAction, secondaryAction, className }: InsightCardProps) {
+export function InsightCard({ message, title = 'Tino te sugiere', time, primaryAction, secondaryAction, className }: InsightCardProps) {
   return (
     <section aria-label={title} className={cn('flex flex-col gap-3 rounded-lg bg-brand p-5 text-fg-on-brand shadow-ia', className)}>
       <header className="flex items-center gap-2">

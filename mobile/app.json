@@ -1,23 +1,25 @@
 {
   "expo": {
-    "name": "Finance APP",
-    "slug": "finance-app",
+    "name": "Tino",
+    "slug": "tino",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#f6efe4",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tinofinanzas.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#f6efe4",
+        "backgroundColor": "#1F3D2B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tinofinanzas.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -36,6 +38,6 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker"
     ],
-    "scheme": "financeapp"
+    "scheme": "tino"
   }
 }

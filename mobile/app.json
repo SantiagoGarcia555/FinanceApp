@@ -38,6 +38,12 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker"
     ],
-    "scheme": "tino"
+    "scheme": "tino",
+    "extra": {
+      "eas": {
+        "projectId": "c844c24f-392a-4d50-819a-6c80d9b92ff4"
+      }
+    },
+    "owner": "thegarden555s-team"
   }
 }

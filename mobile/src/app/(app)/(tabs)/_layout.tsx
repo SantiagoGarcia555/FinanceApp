@@ -1,8 +1,7 @@
 import { Tabs } from 'expo-router'
-import { BottomNav, type NavTabKey } from '../../components/ui'
-import { TransactionsProvider } from '../../features/transactions/TransactionsProvider'
-import { useTransactions } from '../../features/transactions/TransactionsContext'
-import { colors } from '../../theme'
+import { BottomNav, type NavTabKey } from '../../../components/ui'
+import { useTransactions } from '../../../features/transactions/TransactionsContext'
+import { colors } from '../../../theme'
 
 /** Pestaña de BottomNav → nombre del archivo de la ruta en (tabs)/. */
 const ROUTE_BY_TAB: Record<NavTabKey, string> = {
@@ -13,16 +12,8 @@ const ROUTE_BY_TAB: Record<NavTabKey, string> = {
 }
 const TAB_BY_ROUTE = Object.fromEntries(Object.entries(ROUTE_BY_TAB).map(([tab, route]) => [route, tab])) as Record<string, NavTabKey>
 
+/** Tabs con la nav flotante. Categorías y hoja de alta/edición vienen de (app)/_layout.tsx. */
 export default function TabsLayout() {
-  // Categorías y hoja de alta/edición compartidas por todas las pestañas
-  return (
-    <TransactionsProvider>
-      <TabsWithNav />
-    </TransactionsProvider>
-  )
-}
-
-function TabsWithNav() {
   const { openNew } = useTransactions()
 
   return (

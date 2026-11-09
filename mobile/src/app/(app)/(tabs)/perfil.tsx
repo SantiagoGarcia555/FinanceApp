@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
-import { LayoutGrid, LogOut } from 'lucide-react-native'
+import { FileUp, LayoutGrid, LogOut } from 'lucide-react-native'
 import { StyleSheet, Text, View } from 'react-native'
-import { getBaseUrl } from '../../api'
-import { useAuth } from '../../auth/AuthContext'
-import { Screen } from '../../components/Screen'
-import { Avatar, Button, Rise } from '../../components/ui'
-import { colors, radius, shadows, space, type } from '../../theme'
+import { getBaseUrl } from '../../../api'
+import { useAuth } from '../../../auth/AuthContext'
+import { Screen } from '../../../components/Screen'
+import { Avatar, Button, Rise } from '../../../components/ui'
+import { colors, radius, shadows, space, type } from '../../../theme'
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth()
@@ -37,6 +37,7 @@ export default function ProfileScreen() {
       )}
 
       <Rise delay={160} style={styles.actions}>
+        <Button variant="secondary" icon={FileUp} label="Importar extracto" block onPress={() => router.push('/importar')} />
         <Button variant="secondary" icon={LayoutGrid} label="Catálogo de componentes" block onPress={() => router.push('/fundamentos')} />
         <Button
           variant="primary"

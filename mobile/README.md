@@ -9,8 +9,11 @@ Estado:
 - **1.3.2**: Inicio = dashboard con datos reales (reglas comunes con la web en `shared/dashboard.ts`).
 - **1.3.3**: alta rápida desde el `+` (monto → categoría → Guardar) y edición/eliminación en la misma hoja.
 - **1.3.4**: Billetera = movimientos del mes con filtros, agrupados por día y con scroll infinito.
-- **1.3.6** (en curso): `eas.json` listo y `android.package` = `com.tinofinanzas.app` (marca Tino). Ver
-  [Builds instalables](#builds-instalables-eas-136). Análisis sigue en "muy pronto".
+- **1.3.6**: APK `preview` con EAS (`com.tinofinanzas.app`, marca Tino). Ver
+  [Builds instalables](#builds-instalables-eas-136).
+- **1.3.5** (en curso): importar extractos CSV/Excel desde el teléfono (Perfil o Billetera → elegir archivo)
+  y "Compartir → Tino" desde el correo o la app del banco. Ver [Importar extractos](#importar-extractos-135).
+  Análisis sigue en "muy pronto".
 
 ## Correr en tu teléfono (sin Android Studio)
 
@@ -59,8 +62,8 @@ Pasos (una sola vez):
 1. Token de acceso en https://expo.dev → Account settings → Access tokens (`npx expo login` falla en
    Windows). En la terminal: `$env:EXPO_TOKEN = "<token>"` (PowerShell). No se guarda en el repo.
 2. `npx eas-cli@latest init` → vincula el proyecto a tu cuenta (agrega `extra.eas.projectId` a `app.json`).
-3. Solo para el perfil `development`: `npx expo install expo-dev-client`. Ojo: con ese paquete,
-   `npm start` abre el dev client en vez de Expo Go (para seguir con Expo Go: `npx expo start --go`).
+3. `expo-dev-client` ya está instalado (1.3.5): `npm start` abre el **dev client** en vez de Expo Go.
+   Para seguir con Expo Go: `npx expo start --go` (todo funciona salvo "Compartir → Tino").
 
 Builds:
 
@@ -73,14 +76,36 @@ Al terminar, EAS da un link/QR para descargar el APK en el teléfono (hay que pe
 de origen desconocido" para el navegador). La primera vez EAS ofrece generar el keystore de firma:
 aceptar (lo guarda EAS; no perderlo, sin él no se pueden publicar actualizaciones en Play Store).
 
+## Importar extractos (1.3.5)
+
+Mismo asistente que `/importar` en la web (archivo → columnas → revisar → listo) y los mismos endpoints
+(`import/inspect`, `preview`, `confirm`); el backend no cambió.
+
+- **Elegir archivo**: Perfil → "Importar extracto", o el ícono junto al título de Billetera.
+  `expo-document-picker` con `type: '*/*'` (muchos gestores de Android etiquetan los CSV como
+  octet-stream) y la app valida `.csv`/`.xlsx` y 10 MB. Funciona en Expo Go.
+- **Compartir → Tino**: `expo-share-intent` agrega un intent filter `SEND` para CSV/Excel
+  (`androidIntentFilters` en `app.json`; `text/*` no, porque Tino aparecería al compartir cualquier
+  texto). El archivo llega a `ShareIntentProvider` (raíz) y `(app)/_layout.tsx` abre `/importar` con él en
+  los parámetros; si no hay sesión, espera al login. **Necesita el dev client o un APK** (en Expo Go
+  el módulo nativo no existe y simplemente no hay intent). iOS desactivado hasta la fase 4.
+- El nombre se completa con la extensión según el MIME si la app que comparte no la manda: la API
+  elige el lector por la extensión.
+
+Para probarlo: `npx eas-cli@latest build -p android --profile development`, instalar el APK y
+`npm start` (o `npm run start:tunnel` en la red de la oficina). Cambios en `app.json` o en paquetes
+nativos exigen un build nuevo; los cambios de JS no.
+
 ## Estructura
 
 ```
 src/app/                   rutas (Expo Router: cada archivo es una pantalla)
-  _layout.tsx              fuentes + splash, AuthProvider y rutas protegidas (Stack.Protected)
+  _layout.tsx              fuentes + splash, ShareIntentProvider, AuthProvider y rutas protegidas (Stack.Protected)
   ingresar.tsx, registro.tsx
-  (tabs)/_layout.tsx       Tabs con BottomNav como barra; index, analisis, billetera, perfil
-  fundamentos.tsx          catálogo vivo (se abre desde Perfil)
+  (app)/_layout.tsx        con sesión: TransactionsProvider + Stack; abre /importar con "Compartir → Tino"
+  (app)/(tabs)/_layout.tsx Tabs con BottomNav como barra; index, analisis, billetera, perfil
+  (app)/fundamentos.tsx    catálogo vivo (se abre desde Perfil)
+  (app)/importar.tsx       importador de extractos (1.3.5)
 src/api/                   cliente HTTP (refresh token en el body, single-flight), auth, tokenStore
 src/auth/                  AuthProvider / useAuth (status: loading | authenticated | anonymous)
 src/theme/

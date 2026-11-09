@@ -4,7 +4,7 @@ import type { CategoryResponse, TransactionResponse } from '../../api/types'
 import { TransactionsContext, type TransactionsContextValue } from './TransactionsContext'
 import { TransactionSheet } from './TransactionSheet'
 
-/** Categorías + hoja de alta/edición compartidas por todas las pestañas (= TransactionsProvider de la web). */
+/** Categorías + hoja de alta/edición compartidas por las pantallas con sesión (= TransactionsProvider de la web). */
 export function TransactionsProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<CategoryResponse[]>([])
   const [categoriesKey, setCategoriesKey] = useState(0)
@@ -29,12 +29,16 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   const openNew = useCallback(() => setSheet((s) => ({ open: true, editing: null, key: s.key + 1 })), [])
   const openEdit = useCallback((editing: TransactionResponse) => setSheet((s) => ({ open: true, editing, key: s.key + 1 })), [])
   const close = useCallback(() => setSheet((s) => ({ ...s, open: false })), [])
+  const notifyChanged = useCallback(() => setVersion((v) => v + 1), [])
   const saved = useCallback(() => {
     setVersion((v) => v + 1)
     setSheet((s) => ({ ...s, open: false }))
   }, [])
 
-  const value = useMemo<TransactionsContextValue>(() => ({ categories, openNew, openEdit, version }), [categories, openNew, openEdit, version])
+  const value = useMemo<TransactionsContextValue>(
+    () => ({ categories, openNew, openEdit, version, notifyChanged }),
+    [categories, openNew, openEdit, version, notifyChanged],
+  )
 
   return (
     <TransactionsContext.Provider value={value}>

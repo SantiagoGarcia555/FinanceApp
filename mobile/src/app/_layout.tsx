@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
+import { ShareIntentProvider } from 'expo-share-intent'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useAuth } from '../auth/AuthContext'
@@ -21,12 +22,16 @@ export default function RootLayout() {
   if (!loaded && !error) return null
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
-    </SafeAreaProvider>
+    // "Compartir con Tino": va por fuera de todo (lo pide expo-share-intent) para no perder el archivo
+    // si llega antes de cargar la sesión. Lo atiende (app)/_layout.tsx.
+    <ShareIntentProvider>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ShareIntentProvider>
   )
 }
 
@@ -43,8 +48,7 @@ function RootNavigator() {
     <>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas }, animation: 'fade' }}>
         <Stack.Protected guard={authenticated}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="fundamentos" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="(app)" />
         </Stack.Protected>
         <Stack.Protected guard={!authenticated}>
           <Stack.Screen name="ingresar" />

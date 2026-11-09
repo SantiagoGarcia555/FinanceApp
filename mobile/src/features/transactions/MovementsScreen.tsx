@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, CloudOff, Plus } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, CloudOff, FileUp, Plus } from 'lucide-react-native'
 import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BOTTOM_NAV_CLEARANCE, Button, categoryIcon, Chip, IconButton, Rise, SegmentedControl, SelectField, TransactionRow } from '../../components/ui'
@@ -17,7 +17,7 @@ const KIND_OPTIONS = [
 ]
 
 /** Billetera (1.3.4): movimientos del mes con filtros, agrupados por día y con scroll infinito. */
-export function MovementsScreen() {
+export function MovementsScreen({ onImport }: { /** Abre el importador de extractos (1.3.5). */ onImport?: () => void }) {
   const insets = useSafeAreaInsets()
   const { categories, openEdit, openNew, version } = useTransactions()
   const [thisMonth] = useState(() => firstOfMonth(new Date()))
@@ -46,11 +46,14 @@ export function MovementsScreen() {
         <Text accessibilityRole="header" style={[type.h1, { color: colors.fg }]}>
           Movimientos
         </Text>
-        {m.status === 'ready' && (
-          <Text accessibilityLiveRegion="polite" style={[type.bodySm, { color: colors.fgMuted }]}>
-            {m.totalCount} {m.totalCount === 1 ? 'movimiento' : 'movimientos'}
-          </Text>
-        )}
+        <View style={styles.titleSide}>
+          {m.status === 'ready' && (
+            <Text accessibilityLiveRegion="polite" style={[type.bodySm, { color: colors.fgMuted }]}>
+              {m.totalCount} {m.totalCount === 1 ? 'movimiento' : 'movimientos'}
+            </Text>
+          )}
+          {onImport && <IconButton icon={FileUp} label="Importar extracto" variant="ghost" onPress={onImport} />}
+        </View>
       </Rise>
 
       {/* Mes */}
@@ -118,6 +121,7 @@ export function MovementsScreen() {
           {filtered ? 'Prueba con otro tipo o categoría.' : 'Registra lo que gastas y recibes para ver a dónde se va tu plata.'}
         </Text>
         {!filtered && <Button icon={Plus} label="Agregar movimiento" onPress={openNew} />}
+        {!filtered && onImport && <Button variant="secondary" icon={FileUp} label="Importar extracto" onPress={onImport} />}
       </View>
     )
 
@@ -192,7 +196,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { flexGrow: 1, paddingHorizontal: space[5] },
   header: { gap: space[4], marginBottom: space[2] },
-  titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3] },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3] },
+  titleSide: { flexDirection: 'row', alignItems: 'center', gap: space[1], marginRight: -space[3] },
   monthBar: {
     flexDirection: 'row',
     alignItems: 'center',

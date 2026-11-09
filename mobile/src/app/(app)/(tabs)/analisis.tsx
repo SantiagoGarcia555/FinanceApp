@@ -1,9 +1,9 @@
 import { ChartColumn } from 'lucide-react-native'
 import { Text } from 'react-native'
-import { ComingSoon } from '../../components/ComingSoon'
-import { Screen } from '../../components/Screen'
-import { Rise } from '../../components/ui'
-import { colors, type } from '../../theme'
+import { ComingSoon } from '../../../components/ComingSoon'
+import { Screen } from '../../../components/Screen'
+import { Rise } from '../../../components/ui'
+import { colors, type } from '../../../theme'
 
 export default function AnalysisScreen() {
   return (

@@ -129,6 +129,29 @@ test('sin red: ApiError(0) con mensaje en español y el refresh token se conserv
   assert.equal(await store.get(), 'refresh-ok')
 })
 
+test('sin red con expo/fetch (FetchError "fetch failed: …"): mismo mensaje de conexión', async () => {
+  install('refresh-ok')
+  configureClient({
+    fetch: async () => {
+      throw new Error('fetch failed: Unable to resolve host')
+    },
+  })
+  await assert.rejects(refreshSession(), (e: unknown) => e instanceof ApiError && e.status === 0 && e.message === NETWORK_ERROR_MESSAGE)
+})
+
+test('un error que no es de red (p. ej. body que fetch no sabe enviar) no culpa a la conexión', async () => {
+  install('refresh-ok')
+  configureClient({
+    fetch: async () => {
+      throw new Error('Unsupported FormDataPart implementation')
+    },
+  })
+  await assert.rejects(
+    refreshSession(),
+    (e: unknown) => e instanceof ApiError && e.status === 0 && e.message.includes('Unsupported FormDataPart') && e.message !== NETWORK_ERROR_MESSAGE,
+  )
+})
+
 test('logout borra el token local y lo envía en el body para revocarlo', async () => {
   routes = (c) => (c.url.endsWith('/login') ? json(200, authResponse(4)) : new Response(null, { status: 204 }))
   await login({ email: 'ana@test.co', password: 'x' })

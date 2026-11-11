@@ -97,12 +97,23 @@ export function onSessionChange(listener: (user: UserResponse | null) => void): 
 
 // ---------- Utilidades HTTP ----------
 
+/**
+ * ¿Falló la red? El fetch de React Native lanza TypeError("Network request failed"); el de Expo
+ * (`expo/fetch`, global desde SDK 58) lanza FetchError("fetch failed: …").
+ */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError || (error instanceof Error && error.message.startsWith('fetch failed'))
+}
+
 async function safeFetch(path: string, init: RequestInit): Promise<Response> {
   try {
     return await fetchImpl(`${baseUrl}${path}`, init)
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') throw error
-    throw new ApiError(0, NETWORK_ERROR_MESSAGE)
+    if ((error instanceof Error && error.name === 'AbortError') || init.signal?.aborted) throw error
+    if (isNetworkError(error)) throw new ApiError(0, NETWORK_ERROR_MESSAGE)
+    // Otro error (p. ej. un body que fetch no sabe enviar): no culpar a la conexión, mostrar el detalle.
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new ApiError(0, `No pudimos enviar la petición (${detail}).`)
   }
 }
 

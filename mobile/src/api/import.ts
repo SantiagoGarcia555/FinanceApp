@@ -17,14 +17,39 @@ export interface UploadFile {
   blob?: Blob
 }
 
+/** Lee el contenido de una URI local (en la app: expo-file-system, ver api/index.ts). */
+export type FileBytesReader = (uri: string) => Promise<Uint8Array>
+
+let readFileBytes: FileBytesReader = async () => {
+  throw new Error('No hay lector de archivos configurado')
+}
+
+export function configureFileReader(reader: FileBytesReader) {
+  readFileBytes = reader
+}
+
+/**
+ * Parte "file" del multipart. OJO: desde SDK 58 el `fetch` global es `expo/fetch`, que NO acepta el
+ * clásico `{ uri, name, type }` de React Native ("Unsupported FormDataPart implementation"); sí
+ * acepta cualquier objeto con `bytes()`, y toma `name` y `type` para los encabezados de la parte.
+ * El nombre importa: la API elige el lector (.csv / .xlsx) por la extensión.
+ */
+export interface BytesPart {
+  name: string
+  type: string
+  bytes: () => Promise<Uint8Array>
+}
+
+export function filePart(file: UploadFile): Blob | BytesPart {
+  if (file.blob) return file.blob
+  return { name: file.name, type: file.mimeType ?? 'application/octet-stream', bytes: () => readFileBytes(file.uri) }
+}
+
 function fileForm(file: UploadFile): FormData {
   const form = new FormData()
-  if (file.blob) {
-    form.append('file', file.blob, file.name)
-  } else {
-    // React Native sube el archivo leyendo la URI con este objeto (no existe Blob nativo de un archivo).
-    form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob)
-  }
+  const part = filePart(file)
+  if (part instanceof Blob) form.append('file', part, file.name)
+  else form.append('file', part as unknown as Blob) // expo/fetch lo serializa con bytes()
   return form
 }
 

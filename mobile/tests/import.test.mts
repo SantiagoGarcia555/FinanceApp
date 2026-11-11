@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
 import { configureClient, memoryTokenStore, setSession } from '../src/api/client'
-import { configureFileReader, confirmImport, filePart, inspectImport, previewImport, type UploadFile } from '../src/api/import'
+import { confirmImport, filePart, inspectImport, previewImport, type UploadFile } from '../src/api/import'
 import type { ImportInspectResponse, ImportRowPreview } from '../src/api/types'
 import {
   buildConfirmRows,
@@ -209,19 +209,34 @@ test('confirm manda las filas en JSON', async () => {
   assert.deepEqual(JSON.parse(calls[0].body as string), { accountId: null, rows: confirmRows })
 })
 
-test('en el teléfono la parte del archivo es { name, type, bytes() } (lo que acepta expo/fetch), no { uri }', async () => {
-  const read: string[] = []
-  configureFileReader(async (uri) => {
-    read.push(uri)
-    return new Uint8Array([70, 69, 67, 72, 65])
-  })
+test('en el teléfono la parte del archivo es { uri, name, type } (la que sube XMLHttpRequest)', () => {
   const part = filePart({ uri: 'content://com.android.providers/12', name: 'extracto.xlsx', mimeType: XLSX, size: 5 })
-  assert.ok(!(part instanceof Blob))
-  assert.equal(part.name, 'extracto.xlsx')
-  assert.equal(part.type, XLSX)
-  assert.ok(!('uri' in part))
-  assert.deepEqual([...(await part.bytes())], [70, 69, 67, 72, 65])
-  assert.deepEqual(read, ['content://com.android.providers/12'])
+  assert.deepEqual(part, { uri: 'content://com.android.providers/12', name: 'extracto.xlsx', type: XLSX })
   // Sin MIME conocido se manda genérico
-  assert.equal((filePart({ uri: 'file:///x.csv', name: 'x.csv', mimeType: null, size: null }) as { type: string }).type, 'application/octet-stream')
+  assert.deepEqual(filePart({ uri: 'file:///x.csv', name: 'x.csv', mimeType: null, size: null }), {
+    uri: 'file:///x.csv',
+    name: 'x.csv',
+    type: 'application/octet-stream',
+  })
+})
+
+test('las subidas usan el transporte de archivos (uploadFetch); el resto, el fetch normal', async () => {
+  const uploads: string[] = []
+  configureClient({
+    uploadFetch: async (url) => {
+      uploads.push(url)
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    },
+  })
+  try {
+    await inspectImport(csv)
+    await confirmImport([])
+    assert.deepEqual(uploads, ['https://api.test/api/transactions/import/inspect'])
+    assert.deepEqual(
+      calls.map((c) => c.url),
+      ['https://api.test/api/transactions/import/confirm'],
+    )
+  } finally {
+    configureClient({ uploadFetch: null })
+  }
 })

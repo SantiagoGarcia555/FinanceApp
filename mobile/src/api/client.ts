@@ -50,12 +50,17 @@ export const NETWORK_ERROR_MESSAGE = 'No pudimos conectar con el servidor. Revis
 
 let baseUrl = ''
 let tokenStore: TokenStore = memoryTokenStore()
-let fetchImpl: typeof fetch = (...args) => fetch(...args)
+type FetchLike = (input: string, init: RequestInit) => Promise<Response>
 
-export function configureClient(options: { baseUrl?: string; tokenStore?: TokenStore; fetch?: typeof fetch }) {
+let fetchImpl: FetchLike = (...args) => fetch(...args)
+/** Transporte para subir archivos (multipart). En la app: xhrFetch (ver api/index.ts y xhrFetch.ts). */
+let uploadFetchImpl: FetchLike | null = null
+
+export function configureClient(options: { baseUrl?: string; tokenStore?: TokenStore; fetch?: FetchLike; uploadFetch?: FetchLike | null }) {
   if (options.baseUrl !== undefined) baseUrl = options.baseUrl.replace(/\/+$/, '')
   if (options.tokenStore) tokenStore = options.tokenStore
   if (options.fetch) fetchImpl = options.fetch
+  if (options.uploadFetch !== undefined) uploadFetchImpl = options.uploadFetch
 }
 
 export function getBaseUrl(): string {
@@ -105,9 +110,9 @@ export function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof Error && error.message.startsWith('fetch failed'))
 }
 
-async function safeFetch(path: string, init: RequestInit): Promise<Response> {
+async function safeFetch(path: string, init: RequestInit, transport: FetchLike = fetchImpl): Promise<Response> {
   try {
-    return await fetchImpl(`${baseUrl}${path}`, init)
+    return await transport(`${baseUrl}${path}`, init)
   } catch (error) {
     if ((error instanceof Error && error.name === 'AbortError') || init.signal?.aborted) throw error
     if (isNetworkError(error)) throw new ApiError(0, NETWORK_ERROR_MESSAGE)
@@ -185,16 +190,21 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 export async function api<T>(path: string, { json, form, auth = true, headers, ...init }: RequestOptions = {}, retried = false): Promise<T> {
   if (auth && !accessToken) await refreshSession()
 
-  const res = await safeFetch(path, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(json !== undefined && { 'Content-Type': 'application/json' }),
-      ...(auth && accessToken && { Authorization: `Bearer ${accessToken}` }),
-      ...headers,
+  const res = await safeFetch(
+    path,
+    {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(json !== undefined && { 'Content-Type': 'application/json' }),
+        ...(auth && accessToken && { Authorization: `Bearer ${accessToken}` }),
+        ...headers,
+      },
+      body: json !== undefined ? JSON.stringify(json) : form,
     },
-    body: json !== undefined ? JSON.stringify(json) : form,
-  })
+    // Archivos: expo/fetch no sabe subir la parte { uri } de React Native (ver xhrFetch.ts)
+    form && uploadFetchImpl ? uploadFetchImpl : fetchImpl,
+  )
 
   if (res.status === 401 && auth) {
     if (!retried && (await refreshSession())) return api<T>(path, { json, form, auth, headers, ...init }, true)

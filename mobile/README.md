@@ -65,6 +65,10 @@ Pasos (una sola vez):
 3. `expo-dev-client` ya está instalado (1.3.5): `npm start` abre el **dev client** en vez de Expo Go.
    Para seguir con Expo Go: `npx expo start --go` (todo funciona salvo "Compartir → Tino").
 
+**Antes de cada build: commitear.** `eas.json` tiene `requireCommit: true` porque en Windows eas-cli
+no aplica bien los `.gitignore` al copiar archivos sin commitear y subía extractos reales y secretos de
+dev. Con `requireCommit` solo sube lo que está en git (~5 MB).
+
 Builds:
 
 ```
